@@ -1,0 +1,217 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Usuarios del sistema
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String
+  name      String
+  role      Role     @default(VIEWER)
+  roleExpiration DateTime?
+  roleAnterior Role?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  movimientosBodega    MovimientoBodega[]
+  movimientosFarmacia  MovimientoFarmacia[]
+}
+
+enum Role {
+  ADMIN
+  BODEGA
+  FARMACIA
+  VIEWER
+}
+
+// ─── MÓDULO BODEGA MUNICIPAL ───────────────────────────
+
+model CategoriaBodega {
+  id        Int        @id @default(autoincrement())
+  nombre    String     @unique
+  productos ProductoBodega[]
+
+  historial ProductoBodegaHistorial[]
+}
+
+model ProductoBodega {
+  id          Int             @id @default(autoincrement())
+  codigo      String          @unique
+  nombre      String
+  descripcion String?
+  unidad      String
+  stockActual Int             @default(0)
+  stockMinimo Int             @default(0)
+  categoria   CategoriaBodega @relation(fields: [categoriaId], references: [id])
+  categoriaId Int
+  activo      Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+
+  movimientos MovimientoBodega[]
+
+  historial ProductoBodegaHistorial[]
+}
+
+model MovimientoBodega {
+  id          Int              @id @default(autoincrement())
+  tipo        TipoMovimiento
+  cantidad    Int
+  documento   TipoDocumento
+  numeroDocumento String?
+  proveedor   String?
+  destinatario String?
+  area        String?
+  observacion String?
+  fecha       DateTime         @default(now())
+  producto    ProductoBodega   @relation(fields: [productoId], references: [id])
+  productoId  Int
+  usuario     User             @relation(fields: [usuarioId], references: [id])
+  usuarioId   Int
+
+  anulado     Boolean          @default(false)
+  motivoAnulacion String?
+  anulacionDeId Int?           @unique
+  anulacionDe MovimientoBodega? @relation("AnulacionBodega", fields: [anulacionDeId], references: [id])
+  anulacion   MovimientoBodega? @relation("AnulacionBodega")
+}
+
+enum TipoMovimiento {
+  ENTRADA
+  SALIDA
+  AJUSTE
+}
+
+enum TipoDocumento {
+  ORDEN_COMPRA
+  FACTURA
+  GUIA_DESPACHO
+  NOTA_DEBITO
+  NOTA_CREDITO
+  ACTA_DONACION
+  SIN_DOCUMENTO
+  OTRO
+}
+
+// ─── MÓDULO FARMACIA POSTA ─────────────────────────────
+
+model CategoriaFarmacia {
+  id          Int          @id @default(autoincrement())
+  nombre      String       @unique
+  medicamentos Medicamento[]
+
+  historial MedicamentoHistorial[]
+}
+
+model Medicamento {
+  id               Int               @id @default(autoincrement())
+  codigo           String            @unique
+  nombreGenerico   String
+  nombreComercial  String?
+  formaFarmaceutica String
+  concentracion    String?
+  unidad           String
+  stockActual      Int               @default(0)
+  stockMinimo      Int               @default(0)
+  categoria        CategoriaFarmacia @relation(fields: [categoriaId], references: [id])
+  categoriaId      Int
+  activo           Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+
+  movimientos MovimientoFarmacia[]
+
+  historial MedicamentoHistorial[]
+
+  lotes LoteFarmacia[]
+}
+
+model Paciente {
+  id          Int      @id @default(autoincrement())
+  rut         String   @unique
+  nombre      String
+  apellido    String
+  telefono    String?
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  movimientos MovimientoFarmacia[]
+}
+
+model MovimientoFarmacia {
+  id           Int        @id @default(autoincrement())
+  tipo         TipoMovimiento
+  cantidad     Int
+  lote         String?
+  fechaVencimiento DateTime?
+  proveedor    String?
+  rutPaciente  String?
+  pacienteId   Int?
+  paciente     Paciente?  @relation(fields: [pacienteId], references: [id])
+  observacion  String?
+  fecha        DateTime   @default(now())
+  medicamento  Medicamento @relation(fields: [medicamentoId], references: [id])
+  medicamentoId Int
+  usuario      User       @relation(fields: [usuarioId], references: [id])
+  usuarioId    Int
+
+  anulado      Boolean    @default(false)
+  motivoAnulacion String?
+  anulacionDeId Int?      @unique
+  anulacionDe  MovimientoFarmacia?  @relation("AnulacionFarmacia", fields: [anulacionDeId], references: [id])
+  anulacion    MovimientoFarmacia?  @relation("AnulacionFarmacia")
+}
+
+model ProductoBodegaHistorial {
+  id          Int      @id @default(autoincrement())
+  productoId  Int
+  nombre      String
+  categoriaId Int
+  unidad      String
+  stockMinimo Int
+  validoDesde DateTime @default(now())
+  validoHasta DateTime?
+  producto    ProductoBodega  @relation(fields: [productoId], references: [id])
+  categoria   CategoriaBodega @relation(fields: [categoriaId], references: [id])
+}
+
+model MedicamentoHistorial {
+  id               Int      @id @default(autoincrement())
+  medicamentoId    Int
+  nombreGenerico   String
+  nombreComercial  String?
+  formaFarmaceutica String
+  concentracion    String?
+  unidad           String
+  stockMinimo      Int
+  categoriaId      Int
+  validoDesde      DateTime @default(now())
+  validoHasta      DateTime?
+  medicamento      Medicamento       @relation(fields: [medicamentoId], references: [id])
+  categoria        CategoriaFarmacia @relation(fields: [categoriaId], references: [id])
+}
+
+model LoteFarmacia {
+  id                Int      @id @default(autoincrement())
+  medicamentoId     Int
+  numeroLote        String
+  fechaVencimiento  DateTime?
+  stockInicial      Int
+  stockActual       Int
+  fechaIngreso      DateTime  @default(now())
+  proveedor         String?
+  retirado          Boolean   @default(false)
+  motivoRetiro      String?
+  fechaRetiro       DateTime?
+  medicamento       Medicamento @relation(fields: [medicamentoId], references: [id])
+}
