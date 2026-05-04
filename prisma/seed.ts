@@ -11,9 +11,8 @@ async function main() {
   const password = process.env.SEED_ADMIN_PASSWORD
   const name = process.env.SEED_ADMIN_NAME ?? "Administrador"
 
-  if (!password) {
-    throw new Error("SEED_ADMIN_PASSWORD no definida en variables de entorno")
-  }
+  if (!password) throw new Error("SEED_ADMIN_PASSWORD no definida en .env")
+
   const hashedPassword = await bcrypt.hash(password, 10)
 
   const admin = await prisma.user.upsert({
@@ -21,13 +20,13 @@ async function main() {
     update: {},
     create: {
       username,
-      name,
       password: hashedPassword,
+      name,
       role: "ADMIN",
     },
   })
 
-  console.log("Usuario admin creado:", username)
+  console.log("Usuario admin creado:", admin.username)
 }
 
 main()
