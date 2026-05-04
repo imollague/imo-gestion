@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Layout from "@/components/Layout"
 import BuscadorCodigo from "@/components/BuscadorCodigo"
@@ -27,7 +27,7 @@ interface Paciente {
   telefono: string | null
 }
 
-export default function NuevoMovimientoFarmaciaPage() {
+function NuevoMovimientoFarmaciaContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const cantidadRef = useRef<HTMLInputElement>(null)
@@ -365,5 +365,13 @@ export default function NuevoMovimientoFarmaciaPage() {
         />
       )}
     </Layout>
+  )
+}
+
+export default function NuevoMovimientoFarmaciaPage() {
+  return (
+    <Suspense>
+      <NuevoMovimientoFarmaciaContent />
+    </Suspense>
   )
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Layout from "@/components/Layout"
 import BuscadorCodigo from "@/components/BuscadorCodigo"
@@ -26,7 +26,7 @@ const TIPOS_DOCUMENTO = [
   { value: "OTRO", label: "Otro" },
 ]
 
-export default function NuevoMovimientoPage() {
+function NuevoMovimientoContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const cantidadRef = useRef<HTMLInputElement>(null)
@@ -427,5 +427,13 @@ export default function NuevoMovimientoPage() {
         />
       )}
     </Layout>
+  )
+}
+
+export default function NuevoMovimientoPage() {
+  return (
+    <Suspense>
+      <NuevoMovimientoContent />
+    </Suspense>
   )
 }
