@@ -289,6 +289,30 @@ src/app/api/flota/
 
 ---
 
+## Integración FEDOKS
+
+**Enfoque híbrido pragmático** — nuestro sistema controla el flujo operativo en tiempo real; FEDOKS queda como archivo documental oficial cuando el proceso lo exige formalmente.
+
+### Orden de Servicio
+- El sistema genera la OS con todos los datos precargados (conductor, vehículo, destino, propósito, hora estimada)
+- Se puede exportar como **PDF** (via jspdf) listo para subir a FEDOKS
+- El conductor registra el **folio FEDOKS** en el sistema (campo opcional, para trazabilidad)
+- El autorizante **confirma en nuestro sistema** (usuario + timestamp) → esto desbloquea el paso operativo sin esperar el ciclo completo de FEDOKS
+- FEDOKS queda como respaldo documental firmado cuando el proceso formal lo requiera
+
+### Documentos que sí van a FEDOKS
+- Actas de entrega/recepción de vehículo
+- Informes de accidente o incidente
+- Bajas de flota
+- Cualquier documento que requiera visación formal de directivos
+
+### Lo que NO se hace via FEDOKS en operación diaria
+- Solicitudes de uso (flujo demasiado lento para operación diaria)
+- Bitácora (dato operativo, no documento formal)
+- Checklist (dato técnico interno)
+
+---
+
 ## Notas técnicas
 
 - **Inmutabilidad:** API de cierre marca `estado = CERRADA`. Todas las rutas POST/PATCH verifican `estado !== CERRADA` antes de proceder.
