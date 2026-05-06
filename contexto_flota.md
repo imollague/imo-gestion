@@ -10,10 +10,12 @@ Gestión del parque vehicular municipal: vehículos, proceso de uso digital (sol
 ## Contexto operativo
 
 - ~15 vehículos entre livianos y maquinaria pesada (camioneta, camión aljibe, recolector de basura, retroexcavadora, etc.)
-- Conductores son siempre funcionarios municipales → FK a `Funcionario` del módulo RRHH
+- Conductores son siempre funcionarios municipales → FK a `Funcionario` del módulo RRHH (nullable mientras RRHH no esté migrado)
+- El flujo es el mismo para movimientos dentro y fuera de la comuna
 - Actualmente el proceso es 100% en papel (bitácora, checklist, orden de servicio)
 - Autorización requiere firma de Administrador, Alcalde o subrogante
 - Encargado de vehículos, Control, Administrador y Alcalde deben poder auditar
+- Conductores son en su mayoría 50+ años → UX simple, botones grandes, pasos claros, mobile-first
 
 ---
 
@@ -21,12 +23,13 @@ Gestión del parque vehicular municipal: vehículos, proceso de uso digital (sol
 
 1. **Auditable por patente** — historial filtrable por vehículo
 2. **Retención mínima 5 años** — sin hard delete en datos operativos
-3. **Operable desde celulares** — diseño responsive (Tailwind ya lo cubre)
-4. **Control de acceso** — roles y autenticación (ya resuelto con NextAuth)
-5. **Proceso cerrado = inmutable** — correcciones son registros nuevos asociados, no edición directa
+3. **Operable desde celulares** — diseño responsive (Tailwind)
+4. **Control de acceso** — roles y autenticación (NextAuth)
+5. **Proceso cerrado = inmutable** — correcciones son registros nuevos, no edición directa
 6. **Múltiples auditores** — Mayor, Control, Admin, Encargado de vehículos
-7. **Sistema modificable** — checklist configurable desde panel admin
+7. **Sistema modificable** — ítems de checklist configurables desde panel admin
 8. **Demo a stakeholders** — Control, Administrador IMO, Alcalde, Encargado de vehículos
+9. **Encargado puede adjuntar archivos** — SOAP, permiso circulación, seguro, etc. directamente al vehículo (almacenado en Supabase Storage)
 
 ---
 
@@ -39,31 +42,55 @@ PENDIENTE → APROBADA → EN_CURSO → CERRADA
 
 Dentro de APROBADA → EN_CURSO ocurren (en orden):
 1. Conductor completa **Checklist** del vehículo
-2. Conductor genera **Orden de Servicio** → espera firma del autorizante
-3. Autorizante firma Orden de Servicio digitalmente (confirma en sistema)
-4. Conductor registra **Bitácora** (km salida/llegada, combustible)
-5. Conductor agrega observación en **Hoja de Vida** del vehículo
-6. Conductor **cierra** el proceso → estado CERRADA (inmutable)
+2. Conductor genera **Orden de Servicio** → espera confirmación del autorizante
+3. Autorizante confirma OS en el sistema (usuario + timestamp)
+4. Conductor registra **km de salida** al partir
+5. Conductor registra **cargas de combustible** durante el viaje (cada carga por separado: km, litros, comprobante)
+6. Conductor registra **km de llegada** al volver
+7. Conductor agrega observación en **Hoja de Vida** del vehículo
+8. Conductor **cierra** el proceso → CERRADA (inmutable)
 
-Flujo de actores:
-- **Conductor** — solicita, realiza checklist, genera orden, llena bitácora, cierra
-- **Administrador / Alcalde / Subrogante** — aprueba solicitud, firma orden de servicio
-- **Encargado de vehículos / Control / Admin** — auditan en cualquier punto
+Actores:
+- **Conductor** — solicita, checklist, genera OS, registra km y combustible, cierra
+- **Administrador / Alcalde / Subrogante** — aprueba solicitud, confirma OS
+- **Encargado / Control / Admin** — auditan, adjuntan documentos al vehículo
+
+---
+
+## Integración FEDOKS
+
+**Enfoque híbrido pragmático** — nuestro sistema controla el flujo operativo en tiempo real; FEDOKS queda como archivo documental oficial cuando el proceso lo exige formalmente.
+
+### Orden de Servicio
+- El sistema genera la OS con todos los datos precargados (conductor, vehículo, destino, propósito, hora estimada)
+- Se puede exportar como **PDF** (via jspdf) listo para subir a FEDOKS
+- El conductor registra el **folio FEDOKS** en el sistema (campo opcional, para trazabilidad)
+- El autorizante **confirma en nuestro sistema** (usuario + timestamp) → desbloquea el paso operativo
+- FEDOKS queda como respaldo documental cuando el proceso formal lo requiera
+
+### Documentos que sí van a FEDOKS
+- Actas de entrega/recepción de vehículo
+- Informes de accidente o incidente
+- Bajas de flota
+
+### Lo que NO va a FEDOKS en operación diaria
+- Solicitudes de uso (demasiado lento para operación diaria)
+- Bitácora, checklist (datos operativos internos)
 
 ---
 
 ## Schema Prisma (Fase 1)
 
-### Enum nuevo
+### Enums nuevos / modificados
 ```prisma
-// Agregar a Role enum:
+// Agregar a Role enum existente:
 FLOTA
 
-// Nuevos enums:
 enum TipoVehiculo {
   CAMIONETA
   SEDAN
-  CAMION
+  CAMION_LIVIANO
+  CAMION_PESADO
   MAQUINARIA
   BUS
   OTRO
@@ -84,7 +111,7 @@ enum EstadoSolicitud {
   CERRADA
 }
 
-enum TipoMantención {
+enum TipoMantencion {
   PREVENTIVA
   CORRECTIVA
   EMERGENCIA
@@ -99,11 +126,10 @@ model Vehiculo {
   patente               String          @unique
   marca                 String
   modelo                String
-  año                   Int
+  anio                  Int
   tipo                  TipoVehiculo
   estado                EstadoVehiculo  @default(OPERATIVO)
   kmActual              Int             @default(0)
-  // Vencimientos documentales
   vencimientoSOAP       DateTime?
   vencimientoRevTecnica DateTime?
   vencimientoPermiso    DateTime?
@@ -114,31 +140,47 @@ model Vehiculo {
   solicitudes    SolicitudVehiculo[]
   mantenciones   MantencionVehiculo[]
   hojaVida       HojaVidaVehiculo[]
+  documentos     DocumentoVehiculo[]   // archivos adjuntos
+}
+
+// Archivos adjuntos al vehículo (SOAP, seguro, permiso, etc.)
+model DocumentoVehiculo {
+  id          Int      @id @default(autoincrement())
+  vehiculoId  Int
+  vehiculo    Vehiculo @relation(...)
+  nombre      String
+  tipo        String   // SOAP | PERMISO | SEGURO | REVISION_TECNICA | OTRO
+  url         String   // URL en Supabase Storage
+  subidoPorId Int
+  subidoPor   User     @relation(...)
+  fecha       DateTime @default(now())
 }
 
 model SolicitudVehiculo {
   id              Int             @id @default(autoincrement())
   vehiculoId      Int
   vehiculo        Vehiculo        @relation(...)
-  conductorId     Int             // FK Funcionario
-  conductor       Funcionario     @relation(...)
+  conductorId     Int?            // nullable mientras RRHH no esté migrado
+  conductor       Funcionario?    @relation(...)
+  conductorNombre String          // nombre libre como fallback hasta integrar RRHH
   estado          EstadoSolicitud @default(PENDIENTE)
   destino         String
   proposito       String
   fechaSolicitud  DateTime        @default(now())
   // Aprobación
-  aprobadoPorId   Int?            // FK User (Admin/Alcalde)
-  aprobadoPor     User?           @relation(...)
+  aprobadoPorId   Int?
+  aprobadoPor     User?           @relation("AprobacionFlota", ...)
   fechaAprobacion DateTime?
   motivoRechazo   String?
   // Cierre
   fechaCierre     DateTime?
   cerradoPorId    Int?
+  cerradoPor      User?           @relation("CierreFlota", ...)
 
   checklist       ChecklistSolicitud?
   ordenServicio   OrdenServicio?
   bitacora        BitacoraViaje?
-  observaciones   HojaVidaVehiculo[]
+  hojaVida        HojaVidaVehiculo[]
 }
 
 model ChecklistSolicitud {
@@ -149,14 +191,14 @@ model ChecklistSolicitud {
   respuestas    ChecklistRespuesta[]
 }
 
+// Items configurables desde panel admin — genéricos, solo cambia imagen por TipoVehiculo
 model ChecklistItem {
-  // Configurable desde admin
-  id         Int      @id @default(autoincrement())
-  categoria  String   // DOCUMENTACION | NIVELES | ELECTRICO | SISTEMAS | GENERAL
+  id          Int      @id @default(autoincrement())
+  categoria   String   // DOCUMENTACION | NIVELES | ELECTRICO | SISTEMAS | GENERAL
   descripcion String
-  orden      Int
-  activo     Boolean  @default(true)
-  respuestas ChecklistRespuesta[]
+  orden       Int
+  activo      Boolean  @default(true)
+  respuestas  ChecklistRespuesta[]
 }
 
 model ChecklistRespuesta {
@@ -170,83 +212,108 @@ model ChecklistRespuesta {
 }
 
 model OrdenServicio {
-  id              Int               @id @default(autoincrement())
-  solicitudId     Int               @unique
-  solicitud       SolicitudVehiculo @relation(...)
-  horaSalida      DateTime
-  horaRetornoEst  DateTime?
-  firmadaPorId    Int?              // FK User que autoriza
-  firmadaPor      User?             @relation(...)
-  fechaFirma      DateTime?
-  firmada         Boolean           @default(false)
+  id             Int               @id @default(autoincrement())
+  solicitudId    Int               @unique
+  solicitud      SolicitudVehiculo @relation(...)
+  horaSalidaEst  DateTime
+  horaRetornoEst DateTime?
+  folioFedoks    String?           // referencia opcional al expediente FEDOKS
+  firmadaPorId   Int?
+  firmadaPor     User?             @relation(...)
+  fechaFirma     DateTime?
+  firmada        Boolean           @default(false)
 }
 
 model BitacoraViaje {
-  id               Int               @id @default(autoincrement())
-  solicitudId      Int               @unique
-  solicitud        SolicitudVehiculo @relation(...)
-  kmSalida         Int
-  kmLlegada        Int
-  litrosCombustible Float?
-  comprobanteRef   String?
-  horaRetornoReal  DateTime?
-  observacion      String?
-  registradoEn     DateTime          @default(now())
+  id              Int               @id @default(autoincrement())
+  solicitudId     Int               @unique
+  solicitud       SolicitudVehiculo @relation(...)
+  kmSalida        Int
+  kmLlegada       Int?              // null hasta el retorno
+  horaRetornoReal DateTime?
+  observacion     String?
+  registradoEn    DateTime          @default(now())
+
+  cargas          CargaCombustible[]
+}
+
+// Registro individual por carga — puede haber múltiples por viaje
+model CargaCombustible {
+  id             Int           @id @default(autoincrement())
+  bitacoraId     Int
+  bitacora       BitacoraViaje @relation(...)
+  kmAlMomento    Int
+  litros         Float
+  comprobanteRef String?
+  fecha          DateTime      @default(now())
 }
 
 model HojaVidaVehiculo {
-  id          Int      @id @default(autoincrement())
+  id          Int               @id @default(autoincrement())
   vehiculoId  Int
-  vehiculo    Vehiculo @relation(...)
-  solicitudId Int?     // null si es mantención u otro evento
-  tipo        String   // USO | MANTENCION | CORRECCION | ALERTA
+  vehiculo    Vehiculo          @relation(...)
+  solicitudId Int?
+  solicitud   SolicitudVehiculo? @relation(...)
+  tipo        String            // USO | MANTENCION | CORRECCION | ALERTA | DOCUMENTO
   descripcion String
   usuarioId   Int
-  usuario     User     @relation(...)
-  fecha       DateTime @default(now())
+  usuario     User              @relation(...)
+  fecha       DateTime          @default(now())
 }
 
 model MantencionVehiculo {
-  id          Int            @id @default(autoincrement())
-  vehiculoId  Int
-  vehiculo    Vehiculo       @relation(...)
-  tipo        TipoMantención
-  fecha       DateTime
-  taller      String?
-  costo       Float?
-  kmAlMomento Int?
-  descripcion String?
-  registradoEn DateTime      @default(now())
-  usuarioId   Int
-  usuario     User           @relation(...)
+  id           Int            @id @default(autoincrement())
+  vehiculoId   Int
+  vehiculo     Vehiculo       @relation(...)
+  tipo         TipoMantencion
+  fecha        DateTime
+  taller       String?
+  costo        Float?
+  kmAlMomento  Int?
+  descripcion  String?
+  registradoEn DateTime       @default(now())
+  usuarioId    Int
+  usuario      User           @relation(...)
 }
 ```
 
 ---
 
+## Decisiones de diseño UX (conductores 50+)
+
+- Pasos del proceso como **stepper grande** — siempre visible en qué etapa está
+- Cada paso tiene **una sola acción principal** — botón grande y claro
+- Checklist con botones grandes OK / NO OK / N/A (no checkboxes pequeños)
+- Imagen referencial del vehículo/maquinaria en el checklist (cambia según `TipoVehiculo`)
+- Registro de km y combustible con inputs numéricos grandes, teclado numérico en móvil (`inputMode="numeric"`)
+- Textos de estado claros: "Esperando aprobación", "Listo para salir", "En viaje", "Cerrado"
+
+---
+
 ## Roadmap
 
-### Fase 1 — Proceso digital completo *(próximo a codificar)*
-- [ ] Schema Prisma + migración
-- [ ] CRUD vehículos (con alertas documentales en listado)
+### Fase 1 — Proceso digital completo *(a codificar)*
+- [ ] Schema Prisma + migración + `FLOTA` en enum Role
+- [ ] CRUD vehículos + alertas documentales en listado
+- [ ] Subida de archivos al vehículo (Supabase Storage)
 - [ ] Solicitud de uso + aprobación/rechazo
-- [ ] Checklist digital (items configurables)
-- [ ] Orden de Servicio + firma digital
-- [ ] Bitácora de viaje
+- [ ] Checklist digital (ítems configurables)
+- [ ] Orden de Servicio + confirmación + PDF descargable
+- [ ] Bitácora: km salida, cargas de combustible, km llegada
 - [ ] Cierre de proceso (inmutable)
 - [ ] Hoja de vida del vehículo
-- [ ] Vista de auditoría por patente
+- [ ] Links en campana de alertas (documentos por vencer)
 
 ### Fase 2 — Mantenciones y reportes
 - [ ] Registro de mantenciones
-- [ ] Reporte costo mensual por vehículo
-- [ ] Vehículos con mantención/doc próxima a vencer
+- [ ] Reporte costo mensual por vehículo (combustible + mantención)
 - [ ] Exportación Excel/PDF
 
 ### Fase 3 — Admin avanzado
-- [ ] Panel de configuración de ítems del checklist
-- [ ] Correcciones formales post-cierre (registro auditado)
+- [ ] Panel configuración ítems checklist
+- [ ] Correcciones formales post-cierre auditadas
 - [ ] Historial por conductor/funcionario
+- [ ] Integración FK Funcionario cuando RRHH esté migrado
 
 ---
 
@@ -255,26 +322,25 @@ model MantencionVehiculo {
 ```
 src/app/
   flota/
-    page.tsx                    ← listado de vehículos + alertas
-    [vehiculoId]/
-      page.tsx                  ← hoja de vida del vehículo
+    page.tsx                          ← panel vehículos + alertas doc
     solicitudes/
-      page.tsx                  ← mis solicitudes / todas (según rol)
+      page.tsx                        ← mis solicitudes / todas (por rol)
       nueva/page.tsx
       [id]/
-        page.tsx                ← detalle solicitud + acciones según estado
+        page.tsx                      ← detalle + stepper del proceso
         checklist/page.tsx
         orden/page.tsx
         bitacora/page.tsx
     vehiculos/
       nuevo/page.tsx
-      [id]/editar/page.tsx
-    mantenciones/
-      page.tsx
+      [id]/
+        page.tsx                      ← hoja de vida + docs adjuntos
+        editar/page.tsx
 
 src/app/api/flota/
   vehiculos/route.ts
   vehiculos/[id]/route.ts
+  vehiculos/[id]/documentos/route.ts
   solicitudes/route.ts
   solicitudes/[id]/route.ts
   solicitudes/[id]/aprobar/route.ts
@@ -283,40 +349,19 @@ src/app/api/flota/
   solicitudes/[id]/orden/route.ts
   solicitudes/[id]/orden/firmar/route.ts
   solicitudes/[id]/bitacora/route.ts
+  solicitudes/[id]/bitacora/carga/route.ts
   solicitudes/[id]/cerrar/route.ts
-  alertas/route.ts              ← documentos por vencer
+  alertas/route.ts
 ```
-
----
-
-## Integración FEDOKS
-
-**Enfoque híbrido pragmático** — nuestro sistema controla el flujo operativo en tiempo real; FEDOKS queda como archivo documental oficial cuando el proceso lo exige formalmente.
-
-### Orden de Servicio
-- El sistema genera la OS con todos los datos precargados (conductor, vehículo, destino, propósito, hora estimada)
-- Se puede exportar como **PDF** (via jspdf) listo para subir a FEDOKS
-- El conductor registra el **folio FEDOKS** en el sistema (campo opcional, para trazabilidad)
-- El autorizante **confirma en nuestro sistema** (usuario + timestamp) → esto desbloquea el paso operativo sin esperar el ciclo completo de FEDOKS
-- FEDOKS queda como respaldo documental firmado cuando el proceso formal lo requiera
-
-### Documentos que sí van a FEDOKS
-- Actas de entrega/recepción de vehículo
-- Informes de accidente o incidente
-- Bajas de flota
-- Cualquier documento que requiera visación formal de directivos
-
-### Lo que NO se hace via FEDOKS en operación diaria
-- Solicitudes de uso (flujo demasiado lento para operación diaria)
-- Bitácora (dato operativo, no documento formal)
-- Checklist (dato técnico interno)
 
 ---
 
 ## Notas técnicas
 
-- **Inmutabilidad:** API de cierre marca `estado = CERRADA`. Todas las rutas POST/PATCH verifican `estado !== CERRADA` antes de proceder.
-- **Correcciones:** Son registros en `HojaVidaVehiculo` de tipo `CORRECCION`, nunca edición directa de bitácora/checklist cerrada.
-- **Alertas documentales:** SOAP, revisión técnica y permiso de circulación con alerta a 30 días (se integra en la campana del navbar).
-- **Conductor → Funcionario:** Requiere que módulo RRHH tenga Fase 1 desplegada en BD. Para Fase 1 de Flota se puede vincular por `funcionarioId` sin bloquear si RRHH no está migrado aún (campo nullable temporalmente).
-- **Responsive:** Prioridad en vistas de checklist y bitácora (se usan en terreno desde celular).
+- **Inmutabilidad:** Al cerrar, todas las rutas PATCH/POST verifican `estado !== CERRADA`
+- **Correcciones post-cierre:** Nuevos registros en `HojaVidaVehiculo` tipo `CORRECCION`
+- **Archivos adjuntos:** Supabase Storage bucket `flota-docs`, URL pública guardada en `DocumentoVehiculo.url`
+- **Checklist imagen referencial:** componente muestra imagen según `vehiculo.tipo` (`/images/flota/camioneta.png`, `/images/flota/maquinaria.png`, etc.)
+- **Combustible múltiple:** `CargaCombustible[]` relación desde `BitacoraViaje` — la bitácora se crea al registrar km salida y se cierra con km llegada
+- **Conductor fallback:** `conductorNombre` (texto libre) mientras RRHH no esté migrado; cuando se integre RRHH, `conductorId` pasa a required
+- **Alertas documentales:** se integran en `/api/alertas` existente con nuevos campos `vehiculosDocVencidos` y `vehiculosDocPorVencer`
