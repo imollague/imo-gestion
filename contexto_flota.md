@@ -292,16 +292,17 @@ model MantencionVehiculo {
 
 ## Roadmap
 
-### Fase 1 — Proceso digital completo *(a codificar)*
-- [ ] Schema Prisma + migración + `FLOTA` en enum Role
-- [ ] CRUD vehículos + alertas documentales en listado
+### Fase 1 — Proceso digital completo
+- [x] Schema Prisma + migración + `FLOTA` en enum Role
+- [x] CRUD vehículos + alertas documentales en listado
+- [x] Hoja de vida del vehículo (vista detalle)
+- [x] Links navbar (Flota para ADMIN+FLOTA, Mis Solicitudes para FLOTA)
 - [ ] Subida de archivos al vehículo (Supabase Storage)
 - [ ] Solicitud de uso + aprobación/rechazo
 - [ ] Checklist digital (ítems configurables)
 - [ ] Orden de Servicio + confirmación + PDF descargable
 - [ ] Bitácora: km salida, cargas de combustible, km llegada
 - [ ] Cierre de proceso (inmutable)
-- [ ] Hoja de vida del vehículo
 - [ ] Links en campana de alertas (documentos por vencer)
 
 ### Fase 2 — Mantenciones y reportes

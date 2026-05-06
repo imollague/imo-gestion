@@ -33,6 +33,8 @@ export default function Layout({ children, titulo }: LayoutProps) {
     { href: "/farmacia", label: "Farmacia", roles: ["ADMIN", "FARMACIA", "VIEWER"] },
     { href: "/farmacia/pacientes", label: "Pacientes", roles: ["ADMIN", "FARMACIA"] },
     { href: "/dashboard/stats", label: "Estadisticas", roles: null },
+    { href: "/flota", label: "Flota", roles: ["ADMIN", "FLOTA"] },
+    { href: "/flota/solicitudes", label: "Mis Solicitudes", roles: ["FLOTA"] },
     { href: "/admin/usuarios", label: "Usuarios", roles: ["ADMIN"] },
     { href: "/admin/actividad", label: "Actividad", roles: ["ADMIN"] },
   ]
