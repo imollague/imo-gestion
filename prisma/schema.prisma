@@ -27,6 +27,7 @@ model User {
 
   movimientosBodega    MovimientoBodega[]
   movimientosFarmacia  MovimientoFarmacia[]
+  solicitudesCreadas   SolicitudVehiculo[]  @relation("CreadoPorFlota")
   solicitudesAprobadas SolicitudVehiculo[]  @relation("AprobacionFlota")
   solicitudesCerradas  SolicitudVehiculo[]  @relation("CierreFlota")
   ordenesFlota         OrdenServicioFlota[] @relation("FirmaOrdenFlota")
@@ -294,6 +295,8 @@ model SolicitudVehiculo {
   id              Int             @id @default(autoincrement())
   vehiculoId      Int
   vehiculo        Vehiculo        @relation(fields: [vehiculoId], references: [id])
+  creadoPorId     Int
+  creadoPor       User            @relation("CreadoPorFlota", fields: [creadoPorId], references: [id])
   conductorId     Int?
   conductorNombre String
   estado          EstadoSolicitud @default(PENDIENTE)
