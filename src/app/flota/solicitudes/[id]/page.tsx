@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { useSession } from "next-auth/react"
 import Layout from "@/components/Layout"
+import jsPDF from "jspdf"
 
 interface ChecklistItem { id: number; categoria: string; descripcion: string; orden: number }
 interface ChecklistRespuesta { itemId: number; valor: string; observacion: string }
@@ -46,14 +47,68 @@ function getPaso(s: Solicitud): number {
   return 0
 }
 
-const PASOS_LABEL = ["", "Solicitud", "Checklist", "Orden", "Firma", "Salida", "En viaje", "Llegada", "Cerrada"]
-
 function fmt(iso: string) {
   return new Date(iso).toLocaleString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
 }
 
 function fmtFecha(iso: string) {
   return new Date(iso).toLocaleDateString("es-CL")
+}
+
+function generarPDFOrden(s: Solicitud) {
+  const doc = new jsPDF()
+  const margen = 20
+  let y = margen
+
+  // Encabezado
+  doc.setFontSize(11)
+  doc.setTextColor(100)
+  doc.text("Municipalidad de Ollagüe — Sistema IMO", margen, y)
+  y += 8
+  doc.setFontSize(16)
+  doc.setTextColor(0)
+  doc.setFont("helvetica", "bold")
+  doc.text(`Orden de Servicio N° ${s.id}`, margen, y)
+  y += 6
+  doc.setDrawColor(200)
+  doc.line(margen, y, 210 - margen, y)
+  y += 10
+
+  // Datos
+  const campos: [string, string][] = [
+    ["Conductor", s.conductorNombre],
+    ["Vehículo", `${s.vehiculo.patente} — ${s.vehiculo.marca} ${s.vehiculo.modelo}`],
+    ["Destino", s.destino],
+    ["Propósito", s.proposito],
+    ["Salida estimada", s.ordenServicio?.horaSalidaEst ? fmt(s.ordenServicio.horaSalidaEst) : "—"],
+    ["Retorno estimado", s.ordenServicio?.horaRetornoEst ? fmt(s.ordenServicio.horaRetornoEst) : "—"],
+    ["Fecha solicitud", fmtFecha(s.fechaSolicitud)],
+    ...(s.ordenServicio?.folioFedoks ? [["Folio FEDOKS", s.ordenServicio.folioFedoks] as [string, string]] : []),
+  ]
+
+  doc.setFont("helvetica", "normal")
+  doc.setFontSize(11)
+  for (const [label, valor] of campos) {
+    doc.setFont("helvetica", "bold")
+    doc.text(`${label}:`, margen, y)
+    doc.setFont("helvetica", "normal")
+    doc.text(valor, margen + 55, y)
+    y += 8
+  }
+
+  // Firma
+  y += 16
+  doc.line(margen, y, margen + 70, y)
+  y += 6
+  doc.setFontSize(10)
+  doc.setTextColor(100)
+  doc.text("Firma Autorizante", margen, y)
+  doc.text("(Administrador / Alcalde / Subrogante)", margen, y + 5)
+
+  doc.line(210 - margen - 70, y - 6, 210 - margen, y - 6)
+  doc.text("Firma Conductor", 210 - margen - 70, y)
+
+  doc.save(`OS-${s.id}-${s.vehiculo.patente}.pdf`)
 }
 
 // ─── Componentes de cada paso ────────────────────────
@@ -638,7 +693,15 @@ export default function SolicitudDetallePage() {
               <div>
                 {role === "ADMIN" ? (
                   <div className="space-y-4">
-                    <p className="font-semibold text-gray-800 text-lg">Orden de Servicio lista para firmar</p>
+                    <div className="flex items-center justify-between">
+                      <p className="font-semibold text-gray-800 text-lg">Orden de Servicio lista para firmar</p>
+                      <button
+                        onClick={() => generarPDFOrden(solicitud)}
+                        className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-50 transition-colors"
+                      >
+                        📄 Descargar PDF
+                      </button>
+                    </div>
                     <div className="bg-gray-50 rounded-lg p-4 text-sm space-y-2">
                       <div className="flex justify-between">
                         <span className="text-gray-500">Conductor</span>
@@ -669,10 +732,16 @@ export default function SolicitudDetallePage() {
                     </button>
                   </div>
                 ) : (
-                  <div className="text-center py-8">
+                  <div className="text-center py-6">
                     <p className="text-4xl mb-3">✍️</p>
                     <p className="text-xl font-semibold text-gray-700">Esperando autorización</p>
-                    <p className="text-gray-400 mt-2">Un administrador debe firmar la orden de servicio.</p>
+                    <p className="text-gray-400 mt-2 mb-5">Un administrador debe firmar la orden de servicio.</p>
+                    <button
+                      onClick={() => generarPDFOrden(solicitud)}
+                      className="inline-flex items-center gap-2 bg-gray-100 text-gray-700 px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
+                    >
+                      📄 Descargar PDF para FEDOKS
+                    </button>
                   </div>
                 )}
               </div>

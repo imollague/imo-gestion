@@ -298,12 +298,12 @@ model MantencionVehiculo {
 - [x] Hoja de vida del vehículo (vista detalle)
 - [x] Links navbar (Flota para ADMIN+FLOTA, Mis Solicitudes para FLOTA)
 - [ ] Subida de archivos al vehículo (Supabase Storage)
-- [ ] Solicitud de uso + aprobación/rechazo
-- [ ] Checklist digital (ítems configurables)
-- [ ] Orden de Servicio + confirmación + PDF descargable
-- [ ] Bitácora: km salida, cargas de combustible, km llegada
-- [ ] Cierre de proceso (inmutable)
-- [ ] Links en campana de alertas (documentos por vencer)
+- [x] Solicitud de uso + aprobación/rechazo
+- [x] Checklist digital (20 ítems en 5 categorías, seed en prisma/seed-checklist.ts)
+- [x] Orden de Servicio + confirmación + PDF descargable (pasos 3 y 4 del stepper)
+- [x] Bitácora: km salida, cargas de combustible múltiples, km llegada
+- [x] Cierre de proceso (inmutable, auto-registra en hoja de vida)
+- [x] Links en campana de alertas (vencidos en rojo, por vencer en amarillo)
 
 ### Fase 2 — Mantenciones y reportes
 - [ ] Registro de mantenciones

@@ -13,6 +13,8 @@ interface Alertas {
   productosStockBajo: number
   medicamentosStockBajo: number
   medicamentosPorVencer: number
+  vehiculosDocVencidos: number
+  vehiculosDocPorVencer: number
   total: number
 }
 
@@ -172,6 +174,28 @@ export default function Layout({ children, titulo }: LayoutProps) {
                               {alertas.medicamentosPorVencer} lote{alertas.medicamentosPorVencer > 1 ? "s" : ""} por vencer en 30 dias
                             </p>
                             <p className="text-xs text-gray-400">Farmacia Posta Rural</p>
+                          </div>
+                        </a>
+                      )}
+                      {alertas.vehiculosDocVencidos > 0 && (
+                        <a href="/flota" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
+                          <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                          <div>
+                            <p className="text-sm text-gray-800 font-medium">
+                              {alertas.vehiculosDocVencidos} vehículo{alertas.vehiculosDocVencidos > 1 ? "s" : ""} con documentos vencidos
+                            </p>
+                            <p className="text-xs text-gray-400">Flota Municipal</p>
+                          </div>
+                        </a>
+                      )}
+                      {alertas.vehiculosDocPorVencer > 0 && (
+                        <a href="/flota" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
+                          <span className="w-2 h-2 rounded-full bg-yellow-500 shrink-0" />
+                          <div>
+                            <p className="text-sm text-gray-800 font-medium">
+                              {alertas.vehiculosDocPorVencer} vehículo{alertas.vehiculosDocPorVencer > 1 ? "s" : ""} con doc. por vencer
+                            </p>
+                            <p className="text-xs text-gray-400">Flota Municipal</p>
                           </div>
                         </a>
                       )}
