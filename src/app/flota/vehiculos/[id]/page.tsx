@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { useSession } from "next-auth/react"
 import Layout from "@/components/Layout"
@@ -38,8 +38,73 @@ const TIPO_HOJA: Record<string, string> = {
   DOCUMENTO: "📄",
 }
 
+const TIPOS_DOC = [
+  { value: "SOAP", label: "SOAP" },
+  { value: "PERMISO", label: "Permiso de circulación" },
+  { value: "SEGURO", label: "Seguro" },
+  { value: "REVISION_TECNICA", label: "Revisión técnica" },
+  { value: "OTRO", label: "Otro" },
+]
+
 function fmtFecha(iso: string) {
   return new Date(iso).toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" })
+}
+
+function SubirDocumento({ vehiculoId, onSubido }: { vehiculoId: number; onSubido: () => void }) {
+  const [archivo, setArchivo] = useState<File | null>(null)
+  const [nombre, setNombre] = useState("")
+  const [tipo, setTipo] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+
+  const handleSubir = async () => {
+    if (!archivo || !nombre || !tipo) { setError("Completa todos los campos"); return }
+    setError("")
+    setLoading(true)
+    const fd = new FormData()
+    fd.append("archivo", archivo)
+    fd.append("nombre", nombre)
+    fd.append("tipo", tipo)
+    const res = await fetch(`/api/flota/vehiculos/${vehiculoId}/documentos`, {
+      method: "POST",
+      body: fd,
+    })
+    setLoading(false)
+    if (!res.ok) { const d = await res.json(); setError(d.error || "Error al subir"); return }
+    setArchivo(null); setNombre(""); setTipo("")
+    onSubido()
+  }
+
+  return (
+    <div className="border-t pt-4 mt-4 space-y-3">
+      <p className="text-sm font-medium text-gray-600">Adjuntar documento</p>
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">Tipo</label>
+        <select value={tipo} onChange={(e) => setTipo(e.target.value)}
+          className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+          <option value="">Seleccionar...</option>
+          {TIPOS_DOC.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">Nombre descriptivo</label>
+        <input value={nombre} onChange={(e) => setNombre(e.target.value)}
+          placeholder="Ej: SOAP 2026"
+          className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+      </div>
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">Archivo (PDF, imagen)</label>
+        <input type="file" accept=".pdf,.jpg,.jpeg,.png"
+          onChange={(e) => setArchivo(e.target.files?.[0] ?? null)}
+          className="w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+      </div>
+      {error && <p className="text-red-600 text-xs">{error}</p>}
+      <button onClick={handleSubir} disabled={loading}
+        className="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
+        {loading ? "Subiendo..." : "Subir documento"}
+      </button>
+    </div>
+  )
 }
 
 function DocVencimiento({ label, fecha }: { label: string; fecha: string | null }) {
@@ -67,13 +132,14 @@ export default function VehiculoDetallePage() {
     if (status === "unauthenticated") router.push("/login")
   }, [status, router])
 
-  useEffect(() => {
-    if (session) {
-      fetch(`/api/flota/vehiculos/${id}`)
-        .then((r) => r.json())
-        .then((d) => { setVehiculo(d); setCargando(false) })
-    }
+  const cargarVehiculo = useCallback(() => {
+    if (!session) return
+    fetch(`/api/flota/vehiculos/${id}`)
+      .then((r) => r.json())
+      .then((d) => { setVehiculo(d); setCargando(false) })
   }, [session, id])
+
+  useEffect(() => { cargarVehiculo() }, [cargarVehiculo])
 
   const role = session?.user?.role
 
@@ -133,18 +199,41 @@ export default function VehiculoDetallePage() {
             ) : (
               <ul className="space-y-2">
                 {vehiculo.documentos.map((d) => (
-                  <li key={d.id} className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">{d.nombre}</p>
-                      <p className="text-xs text-gray-400">{d.tipo} · {fmtFecha(d.fecha)}</p>
+                  <li key={d.id} className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-700 truncate">{d.nombre}</p>
+                      <p className="text-xs text-gray-400">
+                        {TIPOS_DOC.find((t) => t.value === d.tipo)?.label ?? d.tipo} · {fmtFecha(d.fecha)}
+                      </p>
                     </div>
-                    <a href={d.url} target="_blank" rel="noopener noreferrer"
-                      className="text-blue-600 text-xs hover:underline">
-                      Ver
-                    </a>
+                    <div className="flex gap-2 shrink-0">
+                      <a href={d.url} target="_blank" rel="noopener noreferrer"
+                        className="text-blue-600 text-xs hover:underline">
+                        Ver
+                      </a>
+                      {(role === "ADMIN" || role === "FLOTA") && (
+                        <button
+                          onClick={async () => {
+                            if (!confirm("¿Eliminar este documento?")) return
+                            await fetch(`/api/flota/vehiculos/${vehiculo.id}/documentos`, {
+                              method: "DELETE",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ documentoId: d.id }),
+                            })
+                            cargarVehiculo()
+                          }}
+                          className="text-red-400 text-xs hover:text-red-600"
+                        >
+                          Eliminar
+                        </button>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>
+            )}
+            {(role === "ADMIN" || role === "FLOTA") && (
+              <SubirDocumento vehiculoId={vehiculo.id} onSubido={cargarVehiculo} />
             )}
           </div>
         </div>
