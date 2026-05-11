@@ -127,7 +127,7 @@ export default function Layout({ children, titulo }: LayoutProps) {
 
           <div className="flex items-center gap-4">
             {/* Campana de alertas */}
-            {totalAlertas > 0 && (
+            {alertas && totalAlertas > 0 && (
               <div className="relative" ref={alertasRef}>
                 <button
                   onClick={() => setMostrarAlertas(!mostrarAlertas)}
