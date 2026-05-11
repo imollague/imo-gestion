@@ -421,7 +421,7 @@ function PasoCierre({ solicitudId, bitacora, onDone }: {
   bitacora: NonNullable<Solicitud["bitacora"]>
   onDone: () => void
 }) {
-  const [obs, setObs] = useState("")
+  const [obs, setObs] = useState(bitacora.observacion ?? "")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
