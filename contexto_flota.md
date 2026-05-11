@@ -1,5 +1,5 @@
 # Módulo Gestión de Flota
-> **Estado:** Diseño completo — listo para codificar Fase 1
+> **Estado:** Fase 1 completa — pendiente merge a main y deploy
 > **Rama:** `modulo/flota`
 > **Rol requerido:** `FLOTA` (conductor / encargado) + `ADMIN`
 
@@ -297,7 +297,7 @@ model MantencionVehiculo {
 - [x] CRUD vehículos + alertas documentales en listado
 - [x] Hoja de vida del vehículo (vista detalle)
 - [x] Links navbar (Flota para ADMIN+FLOTA, Mis Solicitudes para FLOTA)
-- [ ] Subida de archivos al vehículo (Supabase Storage)
+- [x] Subida de archivos al vehículo (Supabase Storage — bucket `flota-docs`, server-side con service role key)
 - [x] Solicitud de uso + aprobación/rechazo
 - [x] Checklist digital (20 ítems en 5 categorías, seed en prisma/seed-checklist.ts)
 - [x] Orden de Servicio + confirmación + PDF descargable (pasos 3 y 4 del stepper)
