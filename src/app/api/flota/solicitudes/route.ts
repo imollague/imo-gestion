@@ -49,6 +49,9 @@ export async function POST(req: NextRequest) {
     },
   })
   if (!vehiculo) return NextResponse.json({ error: "Vehículo no encontrado" }, { status: 404 })
+  if (vehiculo.estado !== "OPERATIVO") {
+    return NextResponse.json({ error: "El vehículo no está operativo" }, { status: 409 })
+  }
   if (vehiculo.solicitudes.length > 0) {
     return NextResponse.json({ error: "El vehículo ya tiene una solicitud activa" }, { status: 409 })
   }

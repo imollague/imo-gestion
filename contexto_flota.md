@@ -1,5 +1,5 @@
 # Módulo Gestión de Flota
-> **Estado:** Fase 1 completa — pendiente merge a main y deploy
+> **Estado:** Fase 1 completa, probada y revisada — pendiente merge a main y deploy
 > **Rama:** `modulo/flota`
 > **Rol requerido:** `FLOTA` (conductor / encargado) + `ADMIN`
 
@@ -304,6 +304,8 @@ model MantencionVehiculo {
 - [x] Bitácora: km salida, cargas de combustible múltiples, km llegada
 - [x] Cierre de proceso (inmutable, auto-registra en hoja de vida)
 - [x] Links en campana de alertas (vencidos en rojo, por vencer en amarillo)
+- [x] Rol `FLOTA` agregado a administración de usuarios (src/lib/roles.ts — fuente única de verdad)
+- [x] Revisión y hardening pre-merge: import Role corregido en next-auth.d.ts, alertas campana filtradas por rol, validación km llegada > km salida (API + frontend), validación estado OPERATIVO en API, confirm al cerrar proceso
 
 ### Fase 2 — Mantenciones y reportes
 - [ ] Registro de mantenciones
@@ -315,6 +317,7 @@ model MantencionVehiculo {
 - [ ] Correcciones formales post-cierre auditadas
 - [ ] Historial por conductor/funcionario
 - [ ] Integración FK Funcionario cuando RRHH esté migrado
+- [ ] Vista del checklist completado en detalle de solicitud (auditoría)
 
 ---
 

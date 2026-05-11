@@ -295,6 +295,10 @@ function PasoBitacora({ solicitudId, bitacora, onDone }: {
 
   const registrarLlegada = async () => {
     if (!kmLlegada) { setError("Ingresa el km de llegada"); return }
+    if (bitacora && parseInt(kmLlegada) <= bitacora.kmSalida) {
+      setError(`El km de llegada debe ser mayor al de salida (${bitacora.kmSalida.toLocaleString()} km)`)
+      return
+    }
     setLoading(true)
     const res = await fetch(`/api/flota/solicitudes/${solicitudId}/bitacora`, {
       method: "PATCH",
@@ -350,6 +354,20 @@ function PasoBitacora({ solicitudId, bitacora, onDone }: {
                 <span>{c.litros} L · {c.kmAlMomento.toLocaleString()} km</span>
                 {c.comprobanteRef && <span className="text-gray-400">Comp: {c.comprobanteRef}</span>}
                 <span className="text-gray-400">{fmtFecha(c.fecha)}</span>
+                <button
+                  onClick={async () => {
+                    if (!confirm("¿Eliminar esta carga?")) return
+                    await fetch(`/api/flota/solicitudes/${solicitudId}/bitacora/carga`, {
+                      method: "DELETE",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ cargaId: c.id }),
+                    })
+                    onDone()
+                  }}
+                  className="text-red-400 hover:text-red-600 ml-2"
+                >
+                  ✕
+                </button>
               </div>
             ))}
           </div>
@@ -429,6 +447,7 @@ function PasoCierre({ solicitudId, bitacora, onDone }: {
   const totalLitros = bitacora.cargas.reduce((s, c) => s + c.litros, 0)
 
   const handleCierre = async () => {
+    if (!confirm("¿Cerrar el proceso? Esta acción es irreversible y no podrá modificarse.")) return
     setLoading(true)
     const res = await fetch(`/api/flota/solicitudes/${solicitudId}/cerrar`, {
       method: "POST",
@@ -542,8 +561,7 @@ export default function SolicitudDetallePage() {
   ]
 
   const pasoVisual = solicitud.estado === "RECHAZADA" ? -1
-    : paso <= 1 ? 0
-    : paso === 1 ? 1
+    : paso === 1 ? 0
     : paso <= 5 ? 2
     : paso === 6 ? 3
     : 4

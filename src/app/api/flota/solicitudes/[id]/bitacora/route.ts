@@ -10,7 +10,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params
   const { kmSalida } = await req.json()
 
-  if (!kmSalida) return NextResponse.json({ error: "Km de salida obligatorio" }, { status: 400 })
+  if (kmSalida == null) return NextResponse.json({ error: "Km de salida obligatorio" }, { status: 400 })
 
   const solicitud = await prisma.solicitudVehiculo.findUnique({
     where: { id: parseInt(id) },
@@ -49,7 +49,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params
   const { kmLlegada, horaRetornoReal, observacion } = await req.json()
 
-  if (!kmLlegada) return NextResponse.json({ error: "Km de llegada obligatorio" }, { status: 400 })
+  if (kmLlegada == null) return NextResponse.json({ error: "Km de llegada obligatorio" }, { status: 400 })
 
   const solicitud = await prisma.solicitudVehiculo.findUnique({
     where: { id: parseInt(id) },
@@ -58,6 +58,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!solicitud?.bitacora) return NextResponse.json({ error: "Bitácora no iniciada" }, { status: 404 })
   if (solicitud.bitacora.kmLlegada) {
     return NextResponse.json({ error: "Km de llegada ya registrado" }, { status: 409 })
+  }
+  if (parseInt(kmLlegada) <= solicitud.bitacora.kmSalida) {
+    return NextResponse.json({ error: `El km de llegada debe ser mayor al de salida (${solicitud.bitacora.kmSalida} km)` }, { status: 400 })
   }
 
   const [bitacora] = await prisma.$transaction([
