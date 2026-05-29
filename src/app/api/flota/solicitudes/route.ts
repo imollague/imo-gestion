@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { requireRole } from "@/lib/apiAuth"
 
 export async function GET(req: NextRequest) {
-  const auth = await requireRole("ADMIN", "FLOTA")
+  const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
   if (!auth.ok) return auth.response
 
   const userId = parseInt(auth.session.user.id)
@@ -11,7 +11,8 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const todas = searchParams.get("todas") === "1"
 
-  const where = (role === "ADMIN" && todas) ? {} : { creadoPorId: userId }
+  const puedeVerTodas = role === "ADMIN" || role === "ENCARGADO"
+  const where = (puedeVerTodas && todas) ? {} : { creadoPorId: userId }
 
   const solicitudes = await prisma.solicitudVehiculo.findMany({
     where,
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireRole("ADMIN", "FLOTA")
+  const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
   if (!auth.ok) return auth.response
 
   const userId = parseInt(auth.session.user.id)
