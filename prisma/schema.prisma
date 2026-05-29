@@ -41,6 +41,7 @@ enum Role {
   BODEGA
   FARMACIA
   FLOTA
+  ENCARGADO
   VIEWER
 }
 

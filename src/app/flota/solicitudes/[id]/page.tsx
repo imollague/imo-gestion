@@ -667,7 +667,7 @@ export default function SolicitudDetallePage() {
             {/* PASO 1: Esperando aprobación */}
             {paso === 1 && (
               <div>
-                {role === "ADMIN" ? (
+                {(role === "ADMIN" || role === "ENCARGADO") ? (
                   <div className="space-y-4">
                     <p className="font-semibold text-gray-800 text-lg">Solicitud pendiente de aprobación</p>
                     <p className="text-gray-500">
@@ -709,7 +709,7 @@ export default function SolicitudDetallePage() {
             {/* PASO 4: Esperando firma */}
             {paso === 4 && (
               <div>
-                {role === "ADMIN" ? (
+                {(role === "ADMIN" || role === "ENCARGADO") ? (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <p className="font-semibold text-gray-800 text-lg">Orden de Servicio lista para firmar</p>

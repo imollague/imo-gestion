@@ -59,7 +59,8 @@ export default function SolicitudesPage() {
 
   useEffect(() => {
     if (!session) return
-    const url = role === "ADMIN" && verTodas
+    const puedeVerTodas = role === "ADMIN" || role === "ENCARGADO"
+    const url = puedeVerTodas && verTodas
       ? "/api/flota/solicitudes?todas=1"
       : "/api/flota/solicitudes"
     setCargando(true)
@@ -72,7 +73,7 @@ export default function SolicitudesPage() {
     <Layout titulo="Solicitudes de Vehículos">
       <div className="flex items-center justify-between mb-6">
         <div className="flex gap-2">
-          {role === "ADMIN" && (
+          {(role === "ADMIN" || role === "ENCARGADO") && (
             <>
               <button
                 onClick={() => setVerTodas(false)}

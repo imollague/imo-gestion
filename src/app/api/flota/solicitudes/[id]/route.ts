@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { requireRole } from "@/lib/apiAuth"
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireRole("ADMIN", "FLOTA")
+  const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
   if (!auth.ok) return auth.response
 
   const { id } = await params

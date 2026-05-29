@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { requireRole } from "@/lib/apiAuth"
 
 export async function GET() {
-  const auth = await requireRole("ADMIN", "FLOTA")
+  const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
   if (!auth.ok) return auth.response
 
   const items = await prisma.checklistItem.findMany({

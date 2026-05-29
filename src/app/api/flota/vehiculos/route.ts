@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { requireRole } from "@/lib/apiAuth"
 
 export async function GET() {
-  const auth = await requireRole("ADMIN", "FLOTA")
+  const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
   if (!auth.ok) return auth.response
 
   const vehiculos = await prisma.vehiculo.findMany({
@@ -41,7 +41,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireRole("ADMIN", "FLOTA")
+  const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
   if (!auth.ok) return auth.response
 
   const body = await req.json()

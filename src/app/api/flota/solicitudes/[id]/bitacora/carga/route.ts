@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { requireRole } from "@/lib/apiAuth"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireRole("ADMIN", "FLOTA")
+  const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
   if (!auth.ok) return auth.response
 
   const { id } = await params
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireRole("ADMIN", "FLOTA")
+  const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
   if (!auth.ok) return auth.response
 
   const { id } = await params

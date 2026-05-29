@@ -27,7 +27,7 @@ export default function Layout({ children, titulo }: LayoutProps) {
 
   const role = session?.user?.role
   const cargando = status === "loading"
-  const puedeVerFlota = role === "ADMIN" || role === "FLOTA"
+  const puedeVerFlota = role === "ADMIN" || role === "FLOTA" || role === "ENCARGADO"
   const totalAlertas = alertas
     ? alertas.productosStockBajo + alertas.medicamentosStockBajo + alertas.medicamentosPorVencer +
       (puedeVerFlota ? alertas.vehiculosDocVencidos + alertas.vehiculosDocPorVencer : 0)
@@ -40,8 +40,8 @@ export default function Layout({ children, titulo }: LayoutProps) {
     { href: "/farmacia", label: "Farmacia", roles: ["ADMIN", "FARMACIA", "VIEWER"] },
     { href: "/farmacia/pacientes", label: "Pacientes", roles: ["ADMIN", "FARMACIA"] },
     { href: "/dashboard/stats", label: "Estadisticas", roles: null },
-    { href: "/flota", label: "Flota", roles: ["ADMIN", "FLOTA"] },
-    { href: "/flota/solicitudes", label: "Mis Solicitudes", roles: ["FLOTA"] },
+    { href: "/flota", label: "Flota", roles: ["ADMIN", "FLOTA", "ENCARGADO"] },
+    { href: "/flota/solicitudes", label: "Solicitudes", roles: ["FLOTA", "ENCARGADO"] },
     { href: "/admin/usuarios", label: "Usuarios", roles: ["ADMIN"] },
     { href: "/admin/actividad", label: "Actividad", roles: ["ADMIN"] },
   ]
@@ -182,7 +182,7 @@ export default function Layout({ children, titulo }: LayoutProps) {
                           </div>
                         </a>
                       )}
-                      {(role === "ADMIN" || role === "FLOTA") && alertas.vehiculosDocVencidos > 0 && (
+                      {(role === "ADMIN" || role === "FLOTA" || role === "ENCARGADO") && alertas.vehiculosDocVencidos > 0 && (
                         <a href="/flota" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
                           <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
                           <div>
@@ -193,7 +193,7 @@ export default function Layout({ children, titulo }: LayoutProps) {
                           </div>
                         </a>
                       )}
-                      {(role === "ADMIN" || role === "FLOTA") && alertas.vehiculosDocPorVencer > 0 && (
+                      {(role === "ADMIN" || role === "FLOTA" || role === "ENCARGADO") && alertas.vehiculosDocPorVencer > 0 && (
                         <a href="/flota" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
                           <span className="w-2 h-2 rounded-full bg-yellow-500 shrink-0" />
                           <div>
