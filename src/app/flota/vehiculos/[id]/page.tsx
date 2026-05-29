@@ -259,32 +259,24 @@ export default function VehiculoDetallePage() {
             {vehiculo.solicitudes.length === 0 ? (
               <p className="text-sm text-gray-400">Sin solicitudes registradas</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead className="text-xs text-gray-400 uppercase">
-                  <tr>
-                    <th className="text-left pb-2">Fecha</th>
-                    <th className="text-left pb-2">Conductor</th>
-                    <th className="text-left pb-2">Destino</th>
-                    <th className="text-left pb-2">Estado</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {vehiculo.solicitudes.map((s) => (
-                    <tr key={s.id}
-                      onClick={() => router.push(`/flota/solicitudes/${s.id}`)}
-                      className="cursor-pointer hover:bg-gray-50">
-                      <td className="py-2 text-gray-500">{fmtFecha(s.fechaSolicitud)}</td>
-                      <td className="py-2 text-gray-700">{s.conductorNombre}</td>
-                      <td className="py-2 text-gray-700">{s.destino}</td>
-                      <td className="py-2">
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                          {s.estado}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="space-y-2">
+                {vehiculo.solicitudes.map((s) => (
+                  <div key={s.id}
+                    onClick={() => router.push(`/flota/solicitudes/${s.id}`)}
+                    className="cursor-pointer hover:bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-100 transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-gray-700 truncate">{s.destino}</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 shrink-0">{s.estado}</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-400">
+                      <span>{fmtFecha(s.fechaSolicitud)}</span>
+                      <span>·</span>
+                      <span className="truncate">{s.conductorNombre}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
