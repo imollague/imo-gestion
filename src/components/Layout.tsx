@@ -13,6 +13,8 @@ interface Alertas {
   productosStockBajo: number
   medicamentosStockBajo: number
   medicamentosPorVencer: number
+  vehiculosDocVencidos: number
+  vehiculosDocPorVencer: number
   total: number
 }
 
@@ -25,6 +27,11 @@ export default function Layout({ children, titulo }: LayoutProps) {
 
   const role = session?.user?.role
   const cargando = status === "loading"
+  const puedeVerFlota = role === "ADMIN" || role === "FLOTA"
+  const totalAlertas = alertas
+    ? alertas.productosStockBajo + alertas.medicamentosStockBajo + alertas.medicamentosPorVencer +
+      (puedeVerFlota ? alertas.vehiculosDocVencidos + alertas.vehiculosDocPorVencer : 0)
+    : 0
 
   // Todos los links posibles, con su rol requerido (null = todos)
   const navLinks = [
@@ -33,6 +40,8 @@ export default function Layout({ children, titulo }: LayoutProps) {
     { href: "/farmacia", label: "Farmacia", roles: ["ADMIN", "FARMACIA", "VIEWER"] },
     { href: "/farmacia/pacientes", label: "Pacientes", roles: ["ADMIN", "FARMACIA"] },
     { href: "/dashboard/stats", label: "Estadisticas", roles: null },
+    { href: "/flota", label: "Flota", roles: ["ADMIN", "FLOTA"] },
+    { href: "/flota/solicitudes", label: "Mis Solicitudes", roles: ["FLOTA"] },
     { href: "/admin/usuarios", label: "Usuarios", roles: ["ADMIN"] },
     { href: "/admin/actividad", label: "Actividad", roles: ["ADMIN"] },
   ]
@@ -118,7 +127,7 @@ export default function Layout({ children, titulo }: LayoutProps) {
 
           <div className="flex items-center gap-4">
             {/* Campana de alertas */}
-            {alertas && alertas.total > 0 && (
+            {alertas && totalAlertas > 0 && (
               <div className="relative" ref={alertasRef}>
                 <button
                   onClick={() => setMostrarAlertas(!mostrarAlertas)}
@@ -130,7 +139,7 @@ export default function Layout({ children, titulo }: LayoutProps) {
                       d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                   </svg>
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center">
-                    {alertas.total > 9 ? "9+" : alertas.total}
+                    {totalAlertas > 9 ? "9+" : totalAlertas}
                   </span>
                 </button>
 
@@ -170,6 +179,28 @@ export default function Layout({ children, titulo }: LayoutProps) {
                               {alertas.medicamentosPorVencer} lote{alertas.medicamentosPorVencer > 1 ? "s" : ""} por vencer en 30 dias
                             </p>
                             <p className="text-xs text-gray-400">Farmacia Posta Rural</p>
+                          </div>
+                        </a>
+                      )}
+                      {(role === "ADMIN" || role === "FLOTA") && alertas.vehiculosDocVencidos > 0 && (
+                        <a href="/flota" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
+                          <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                          <div>
+                            <p className="text-sm text-gray-800 font-medium">
+                              {alertas.vehiculosDocVencidos} vehículo{alertas.vehiculosDocVencidos > 1 ? "s" : ""} con documentos vencidos
+                            </p>
+                            <p className="text-xs text-gray-400">Flota Municipal</p>
+                          </div>
+                        </a>
+                      )}
+                      {(role === "ADMIN" || role === "FLOTA") && alertas.vehiculosDocPorVencer > 0 && (
+                        <a href="/flota" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
+                          <span className="w-2 h-2 rounded-full bg-yellow-500 shrink-0" />
+                          <div>
+                            <p className="text-sm text-gray-800 font-medium">
+                              {alertas.vehiculosDocPorVencer} vehículo{alertas.vehiculosDocPorVencer > 1 ? "s" : ""} con doc. por vencer
+                            </p>
+                            <p className="text-xs text-gray-400">Flota Municipal</p>
                           </div>
                         </a>
                       )}

@@ -27,12 +27,20 @@ model User {
 
   movimientosBodega    MovimientoBodega[]
   movimientosFarmacia  MovimientoFarmacia[]
+  solicitudesCreadas   SolicitudVehiculo[]  @relation("CreadoPorFlota")
+  solicitudesAprobadas SolicitudVehiculo[]  @relation("AprobacionFlota")
+  solicitudesCerradas  SolicitudVehiculo[]  @relation("CierreFlota")
+  ordenesFlota         OrdenServicioFlota[] @relation("FirmaOrdenFlota")
+  documentosFlota      DocumentoVehiculo[]
+  hojaVidaFlota        HojaVidaVehiculo[]
+  mantencionesFlota    MantencionVehiculo[]
 }
 
 enum Role {
   ADMIN
   BODEGA
   FARMACIA
+  FLOTA
   VIEWER
 }
 
@@ -214,4 +222,190 @@ model LoteFarmacia {
   motivoRetiro      String?
   fechaRetiro       DateTime?
   medicamento       Medicamento @relation(fields: [medicamentoId], references: [id])
+}
+
+// ─── MÓDULO FLOTA ──────────────────────────────────────
+
+enum TipoVehiculo {
+  CAMIONETA
+  SEDAN
+  CAMION_LIVIANO
+  CAMION_PESADO
+  MAQUINARIA
+  BUS
+  OTRO
+}
+
+enum EstadoVehiculo {
+  OPERATIVO
+  EN_MANTENCION
+  FUERA_SERVICIO
+  DADO_DE_BAJA
+}
+
+enum EstadoSolicitud {
+  PENDIENTE
+  APROBADA
+  RECHAZADA
+  EN_CURSO
+  CERRADA
+}
+
+enum TipoMantencion {
+  PREVENTIVA
+  CORRECTIVA
+  EMERGENCIA
+}
+
+model Vehiculo {
+  id                    Int            @id @default(autoincrement())
+  patente               String         @unique
+  marca                 String
+  modelo                String
+  anio                  Int
+  tipo                  TipoVehiculo
+  estado                EstadoVehiculo @default(OPERATIVO)
+  kmActual              Int            @default(0)
+  vencimientoSOAP       DateTime?
+  vencimientoRevTecnica DateTime?
+  vencimientoPermiso    DateTime?
+  observaciones         String?
+  activo                Boolean        @default(true)
+  createdAt             DateTime       @default(now())
+
+  solicitudes  SolicitudVehiculo[]
+  mantenciones MantencionVehiculo[]
+  hojaVida     HojaVidaVehiculo[]
+  documentos   DocumentoVehiculo[]
+}
+
+model DocumentoVehiculo {
+  id          Int      @id @default(autoincrement())
+  vehiculoId  Int
+  vehiculo    Vehiculo @relation(fields: [vehiculoId], references: [id])
+  nombre      String
+  tipo        String
+  url         String
+  subidoPorId Int
+  subidoPor   User     @relation(fields: [subidoPorId], references: [id])
+  fecha       DateTime @default(now())
+}
+
+model SolicitudVehiculo {
+  id              Int             @id @default(autoincrement())
+  vehiculoId      Int
+  vehiculo        Vehiculo        @relation(fields: [vehiculoId], references: [id])
+  creadoPorId     Int
+  creadoPor       User            @relation("CreadoPorFlota", fields: [creadoPorId], references: [id])
+  conductorId     Int?
+  conductorNombre String
+  estado          EstadoSolicitud @default(PENDIENTE)
+  destino         String
+  proposito       String
+  fechaSolicitud  DateTime        @default(now())
+  aprobadoPorId   Int?
+  aprobadoPor     User?           @relation("AprobacionFlota", fields: [aprobadoPorId], references: [id])
+  fechaAprobacion DateTime?
+  motivoRechazo   String?
+  fechaCierre     DateTime?
+  cerradoPorId    Int?
+  cerradoPor      User?           @relation("CierreFlota", fields: [cerradoPorId], references: [id])
+
+  checklist     ChecklistSolicitud?
+  ordenServicio OrdenServicioFlota?
+  bitacora      BitacoraViaje?
+  hojaVida      HojaVidaVehiculo[]
+}
+
+model ChecklistSolicitud {
+  id           Int               @id @default(autoincrement())
+  solicitudId  Int               @unique
+  solicitud    SolicitudVehiculo @relation(fields: [solicitudId], references: [id])
+  completadoEn DateTime          @default(now())
+
+  respuestas ChecklistRespuesta[]
+}
+
+model ChecklistItem {
+  id          Int      @id @default(autoincrement())
+  categoria   String
+  descripcion String
+  orden       Int
+  activo      Boolean  @default(true)
+
+  respuestas ChecklistRespuesta[]
+}
+
+model ChecklistRespuesta {
+  id          Int                @id @default(autoincrement())
+  checklistId Int
+  checklist   ChecklistSolicitud @relation(fields: [checklistId], references: [id])
+  itemId      Int
+  item        ChecklistItem      @relation(fields: [itemId], references: [id])
+  valor       String
+  observacion String?
+}
+
+model OrdenServicioFlota {
+  id             Int               @id @default(autoincrement())
+  solicitudId    Int               @unique
+  solicitud      SolicitudVehiculo @relation(fields: [solicitudId], references: [id])
+  horaSalidaEst  DateTime
+  horaRetornoEst DateTime?
+  folioFedoks    String?
+  firmadaPorId   Int?
+  firmadaPor     User?             @relation("FirmaOrdenFlota", fields: [firmadaPorId], references: [id])
+  fechaFirma     DateTime?
+  firmada        Boolean           @default(false)
+}
+
+model BitacoraViaje {
+  id              Int               @id @default(autoincrement())
+  solicitudId     Int               @unique
+  solicitud       SolicitudVehiculo @relation(fields: [solicitudId], references: [id])
+  kmSalida        Int
+  kmLlegada       Int?
+  horaRetornoReal DateTime?
+  observacion     String?
+  registradoEn    DateTime          @default(now())
+
+  cargas CargaCombustible[]
+}
+
+model CargaCombustible {
+  id             Int           @id @default(autoincrement())
+  bitacoraId     Int
+  bitacora       BitacoraViaje @relation(fields: [bitacoraId], references: [id])
+  kmAlMomento    Int
+  litros         Float
+  comprobanteRef String?
+  fecha          DateTime      @default(now())
+}
+
+model HojaVidaVehiculo {
+  id          Int                @id @default(autoincrement())
+  vehiculoId  Int
+  vehiculo    Vehiculo           @relation(fields: [vehiculoId], references: [id])
+  solicitudId Int?
+  solicitud   SolicitudVehiculo? @relation(fields: [solicitudId], references: [id])
+  tipo        String
+  descripcion String
+  usuarioId   Int
+  usuario     User               @relation(fields: [usuarioId], references: [id])
+  fecha       DateTime           @default(now())
+}
+
+model MantencionVehiculo {
+  id           Int            @id @default(autoincrement())
+  vehiculoId   Int
+  vehiculo     Vehiculo       @relation(fields: [vehiculoId], references: [id])
+  tipo         TipoMantencion
+  fecha        DateTime
+  taller       String?
+  costo        Float?
+  kmAlMomento  Int?
+  descripcion  String?
+  registradoEn DateTime       @default(now())
+  usuarioId    Int
+  usuario      User           @relation(fields: [usuarioId], references: [id])
 }

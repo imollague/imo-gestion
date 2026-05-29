@@ -1,25 +1,19 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState } from "react"
 import Layout from "@/components/Layout"
+import { type Role, ROLES, ROLE_LABELS } from "@/lib/roles"
 
 interface Usuario {
   id: number
   username: string
   name: string
-  role: "ADMIN" | "BODEGA" | "FARMACIA" | "VIEWER"
-  roleAnterior: "ADMIN" | "BODEGA" | "FARMACIA" | "VIEWER" | null
+  role: Role
+  roleAnterior: Role | null
   roleExpiration: string | null
   active: boolean
   createdAt: string
 }
-
-const ROLES = [
-  { value: "ADMIN", label: "Administrador" },
-  { value: "BODEGA", label: "Bodega" },
-  { value: "FARMACIA", label: "Farmacia" },
-  { value: "VIEWER", label: "Solo lectura" },
-]
 
 export default function UsuariosPage() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
@@ -163,7 +157,7 @@ export default function UsuariosPage() {
       day: "2-digit", month: "2-digit", year: "numeric",
     })
 
-  const rolLabel = (role: string) => ROLES.find((r) => r.value === role)?.label ?? role
+  const rolLabel = (role: string) => ROLE_LABELS[role as Role] ?? role
 
   return (
     <Layout titulo="Administracion de Usuarios">
