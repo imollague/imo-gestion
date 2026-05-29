@@ -171,13 +171,25 @@ export default function VehiculoDetallePage() {
             {vehiculo.observaciones && (
               <p className="text-sm text-gray-500 italic">{vehiculo.observaciones}</p>
             )}
-            {(role === "ADMIN" || role === "FLOTA") && (
+            {(role === "ADMIN" || role === "FLOTA" || role === "ENCARGADO") && (
               <a
                 href={`/flota/vehiculos/${vehiculo.id}/editar`}
                 className="mt-4 block text-center text-sm text-blue-600 hover:underline"
               >
                 Editar vehículo
               </a>
+            )}
+            {role === "ADMIN" && (
+              <button
+                onClick={async () => {
+                  if (!confirm(`¿Desactivar el vehículo ${vehiculo.patente}? Quedará oculto del listado pero sus registros se conservan.`)) return
+                  const res = await fetch(`/api/flota/vehiculos/${vehiculo.id}`, { method: "DELETE" })
+                  if (res.ok) router.push("/flota")
+                }}
+                className="mt-2 w-full text-center text-sm text-red-500 hover:text-red-700 hover:underline"
+              >
+                Desactivar vehículo
+              </button>
             )}
           </div>
 
