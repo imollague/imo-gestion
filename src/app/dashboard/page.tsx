@@ -41,6 +41,13 @@ export default function DashboardPage() {
           </a>
         )}
 
+        {(role === "ADMIN" || role === "FLOTA" || role === "ENCARGADO") && (
+          <a href="/flota" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow border-l-4 border-orange-500">
+            <h3 className="text-lg font-semibold text-gray-800">Flota Municipal</h3>
+            <p className="text-gray-500 text-sm mt-1">Gestión de vehículos y solicitudes de uso</p>
+          </a>
+        )}
+
         {role === "ADMIN" && (
           <a href="/admin/usuarios" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow border-l-4 border-purple-500">
             <h3 className="text-lg font-semibold text-gray-800">Administración</h3>
