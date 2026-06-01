@@ -271,6 +271,7 @@ model Vehiculo {
   vencimientoRevTecnica DateTime?
   vencimientoPermiso    DateTime?
   observaciones         String?
+  imagenUrl             String?
   activo                Boolean        @default(true)
   createdAt             DateTime       @default(now())
 
@@ -370,15 +371,16 @@ model BitacoraViaje {
   observacion     String?
   registradoEn    DateTime          @default(now())
 
-  cargas CargaCombustible[]
+  paradas ParadaViaje[]
 }
 
-model CargaCombustible {
+model ParadaViaje {
   id             Int           @id @default(autoincrement())
   bitacoraId     Int
   bitacora       BitacoraViaje @relation(fields: [bitacoraId], references: [id])
-  kmAlMomento    Int
-  litros         Float
+  km             Int
+  descripcion    String?
+  litros         Float?
   comprobanteRef String?
   fecha          DateTime      @default(now())
 }

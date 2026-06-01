@@ -129,7 +129,7 @@ export default function FlotaPage() {
           >
             Mis solicitudes
           </a>
-          {(role === "ADMIN" || role === "FLOTA") && (
+          {(role === "ADMIN" || role === "ENCARGADO") && (
             <a
               href="/flota/vehiculos/nuevo"
               className="bg-gray-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-900 transition-colors"

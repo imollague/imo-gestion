@@ -18,6 +18,7 @@ interface Vehiculo {
   vencimientoRevTecnica: string | null
   vencimientoPermiso: string | null
   observaciones: string | null
+  imagenUrl: string | null
   hojaVida: { id: number; tipo: string; descripcion: string; fecha: string; usuario: { name: string } }[]
   documentos: { id: number; nombre: string; tipo: string; url: string; fecha: string; subidoPor: { name: string } }[]
   solicitudes: { id: number; estado: string; destino: string; conductorNombre: string; fechaSolicitud: string }[]
@@ -154,7 +155,12 @@ export default function VehiculoDetallePage() {
         <div className="lg:col-span-1 space-y-4">
 
           {/* Ficha del vehículo */}
-          <div className="bg-white rounded-xl shadow-sm p-5">
+          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+            {vehiculo.imagenUrl && (
+              <img src={vehiculo.imagenUrl} alt={vehiculo.patente}
+                className="w-full h-40 object-cover" />
+            )}
+            <div className="p-5">
             <div className="flex items-start justify-between mb-4">
               <div>
                 <p className="text-2xl font-mono font-bold text-gray-800">{vehiculo.patente}</p>
@@ -179,6 +185,33 @@ export default function VehiculoDetallePage() {
                 Editar vehículo
               </a>
             )}
+            {(role === "ADMIN" || role === "ENCARGADO") && (
+              <div className="mt-3 border-t pt-3">
+                <p className="text-xs text-gray-500 mb-1">Imagen del vehículo</p>
+                <input type="file" accept=".jpg,.jpeg,.png,.webp"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    const fd = new FormData()
+                    fd.append("archivo", file)
+                    await fetch(`/api/flota/vehiculos/${vehiculo.id}/imagen`, { method: "POST", body: fd })
+                    cargarVehiculo()
+                    e.target.value = ""
+                  }}
+                  className="w-full text-xs text-gray-600 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+                {vehiculo.imagenUrl && (
+                  <button
+                    onClick={async () => {
+                      if (!confirm("¿Eliminar la imagen del vehículo?")) return
+                      await fetch(`/api/flota/vehiculos/${vehiculo.id}/imagen`, { method: "DELETE" })
+                      cargarVehiculo()
+                    }}
+                    className="mt-1 text-xs text-red-400 hover:text-red-600"
+                  >Eliminar imagen</button>
+                )}
+              </div>
+            )}
             {role === "ADMIN" && (
               <button
                 onClick={async () => {
@@ -191,6 +224,7 @@ export default function VehiculoDetallePage() {
                 Desactivar vehículo
               </button>
             )}
+            </div>
           </div>
 
           {/* Documentación */}

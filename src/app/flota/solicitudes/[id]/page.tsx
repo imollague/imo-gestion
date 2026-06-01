@@ -8,7 +8,7 @@ import jsPDF from "jspdf"
 
 interface ChecklistItem { id: number; categoria: string; descripcion: string; orden: number }
 interface ChecklistRespuesta { itemId: number; valor: string; observacion: string }
-interface CargaCombustible { id: number; kmAlMomento: number; litros: number; comprobanteRef: string | null; fecha: string }
+interface ParadaViaje { id: number; km: number; descripcion: string | null; litros: number | null; comprobanteRef: string | null; fecha: string }
 
 interface Solicitud {
   id: number
@@ -19,13 +19,13 @@ interface Solicitud {
   fechaSolicitud: string
   fechaCierre: string | null
   motivoRechazo: string | null
-  vehiculo: { id: number; patente: string; marca: string; modelo: string; tipo: string }
+  vehiculo: { id: number; patente: string; marca: string; modelo: string; tipo: string; imagenUrl: string | null }
   creadoPor: { id: number; name: string }
   aprobadoPor: { name: string } | null
   cerradoPor: { name: string } | null
   checklist: { id: number; respuestas: { item: ChecklistItem; valor: string; observacion: string | null }[] } | null
   ordenServicio: { id: number; horaSalidaEst: string; horaRetornoEst: string | null; folioFedoks: string | null; firmada: boolean; firmadaPor: { name: string } | null; fechaFirma: string | null } | null
-  bitacora: { id: number; kmSalida: number; kmLlegada: number | null; horaRetornoReal: string | null; observacion: string | null; cargas: CargaCombustible[] } | null
+  bitacora: { id: number; kmSalida: number; kmLlegada: number | null; horaRetornoReal: string | null; observacion: string | null; paradas: ParadaViaje[] } | null
   hojaVida: { id: number; tipo: string; descripcion: string; fecha: string; usuario: { name: string } }[]
 }
 
@@ -113,7 +113,11 @@ function generarPDFOrden(s: Solicitud) {
 
 // ─── Componentes de cada paso ────────────────────────
 
-function PasoChecklist({ solicitudId, onDone }: { solicitudId: number; onDone: () => void }) {
+function PasoChecklist({ solicitudId, vehiculo, onDone }: {
+  solicitudId: number
+  vehiculo: Solicitud["vehiculo"]
+  onDone: () => void
+}) {
   const [items, setItems] = useState<ChecklistItem[]>([])
   const [respuestas, setRespuestas] = useState<Record<number, ChecklistRespuesta>>({})
   const [loading, setLoading] = useState(false)
@@ -140,6 +144,8 @@ function PasoChecklist({ solicitudId, onDone }: { solicitudId: number; onDone: (
   const handleSubmit = async () => {
     const sin = Object.values(respuestas).filter((r) => !r.valor)
     if (sin.length > 0) { setError("Debes responder todos los ítems"); return }
+    const sinObsNoOk = Object.values(respuestas).filter((r) => r.valor === "NO_OK" && !r.observacion.trim())
+    if (sinObsNoOk.length > 0) { setError("Los ítems NO OK requieren una observación"); return }
     setLoading(true)
     const res = await fetch(`/api/flota/solicitudes/${solicitudId}/checklist`, {
       method: "POST",
@@ -153,6 +159,14 @@ function PasoChecklist({ solicitudId, onDone }: { solicitudId: number; onDone: (
 
   return (
     <div className="space-y-6">
+      {/* Imagen del vehículo */}
+      {vehiculo.imagenUrl && (
+        <img
+          src={vehiculo.imagenUrl}
+          alt={vehiculo.patente}
+          className="w-full max-h-48 object-cover rounded-xl"
+        />
+      )}
       <p className="text-gray-600">Revisa el vehículo y completa el checklist antes de salir.</p>
       {categorias.map((cat) => (
         <div key={cat}>
@@ -178,14 +192,14 @@ function PasoChecklist({ solicitudId, onDone }: { solicitudId: number; onDone: (
                     </button>
                   ))}
                 </div>
-                {respuestas[item.id]?.valor === "NO_OK" && (
-                  <input
-                    placeholder="Observación (obligatoria para NO OK)"
-                    value={respuestas[item.id]?.observacion || ""}
-                    onChange={(e) => setObs(item.id, e.target.value)}
-                    className="mt-2 w-full border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                  />
-                )}
+                <input
+                  placeholder={respuestas[item.id]?.valor === "NO_OK" ? "Observación (obligatoria)" : "Observación (opcional)"}
+                  value={respuestas[item.id]?.observacion || ""}
+                  onChange={(e) => setObs(item.id, e.target.value)}
+                  className={`mt-2 w-full border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                    respuestas[item.id]?.valor === "NO_OK" ? "border-red-300 bg-red-50" : "bg-white"
+                  }`}
+                />
               </div>
             ))}
           </div>
@@ -262,7 +276,8 @@ function PasoBitacora({ solicitudId, bitacora, onDone }: {
   const [kmLlegada, setKmLlegada] = useState("")
   const [horaRetorno, setHoraRetorno] = useState("")
   const [observacion, setObservacion] = useState("")
-  const [cargaForm, setCargaForm] = useState({ kmAlMomento: "", litros: "", comprobanteRef: "" })
+  const [paradaForm, setParadaForm] = useState({ km: "", descripcion: "", litros: "", comprobanteRef: "" })
+  const [mostrarCombustible, setMostrarCombustible] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
@@ -279,17 +294,24 @@ function PasoBitacora({ solicitudId, bitacora, onDone }: {
     onDone()
   }
 
-  const agregarCarga = async () => {
-    if (!cargaForm.kmAlMomento || !cargaForm.litros) { setError("Km y litros son obligatorios"); return }
+  const agregarParada = async () => {
+    if (!paradaForm.km) { setError("El km es obligatorio"); return }
+    if (mostrarCombustible && !paradaForm.litros) { setError("Ingresa los litros cargados"); return }
     setLoading(true)
-    const res = await fetch(`/api/flota/solicitudes/${solicitudId}/bitacora/carga`, {
+    const res = await fetch(`/api/flota/solicitudes/${solicitudId}/bitacora/parada`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(cargaForm),
+      body: JSON.stringify({
+        km: paradaForm.km,
+        descripcion: paradaForm.descripcion || null,
+        litros: mostrarCombustible ? paradaForm.litros : null,
+        comprobanteRef: mostrarCombustible ? paradaForm.comprobanteRef || null : null,
+      }),
     })
     setLoading(false)
     if (!res.ok) { const d = await res.json(); setError(d.error); return }
-    setCargaForm({ kmAlMomento: "", litros: "", comprobanteRef: "" })
+    setParadaForm({ km: "", descripcion: "", litros: "", comprobanteRef: "" })
+    setMostrarCombustible(false)
     onDone()
   }
 
@@ -310,7 +332,6 @@ function PasoBitacora({ solicitudId, bitacora, onDone }: {
     onDone()
   }
 
-  // Sin bitácora → registrar km salida
   if (!bitacora) {
     return (
       <div className="space-y-5">
@@ -333,7 +354,6 @@ function PasoBitacora({ solicitudId, bitacora, onDone }: {
     )
   }
 
-  // En viaje → cargas combustible + km llegada
   return (
     <div className="space-y-6">
       <div className="bg-green-50 rounded-lg p-4 flex items-center gap-3">
@@ -344,58 +364,91 @@ function PasoBitacora({ solicitudId, bitacora, onDone }: {
         </div>
       </div>
 
-      {/* Cargas de combustible */}
+      {/* Paradas registradas */}
       <div>
-        <p className="font-medium text-gray-700 mb-3">Cargas de combustible</p>
-        {bitacora.cargas.length > 0 && (
+        <p className="font-medium text-gray-700 mb-3">Paradas del viaje</p>
+        {bitacora.paradas.length > 0 && (
           <div className="space-y-2 mb-4">
-            {bitacora.cargas.map((c) => (
-              <div key={c.id} className="flex justify-between items-center bg-gray-50 rounded-lg px-4 py-2 text-sm">
-                <span>{c.litros} L · {c.kmAlMomento.toLocaleString()} km</span>
-                {c.comprobanteRef && <span className="text-gray-400">Comp: {c.comprobanteRef}</span>}
-                <span className="text-gray-400">{fmtFecha(c.fecha)}</span>
-                <button
-                  onClick={async () => {
-                    if (!confirm("¿Eliminar esta carga?")) return
-                    await fetch(`/api/flota/solicitudes/${solicitudId}/bitacora/carga`, {
-                      method: "DELETE",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ cargaId: c.id }),
-                    })
-                    onDone()
-                  }}
-                  className="text-red-400 hover:text-red-600 ml-2"
-                >
-                  ✕
-                </button>
+            {bitacora.paradas.map((p) => (
+              <div key={p.id} className="bg-gray-50 rounded-lg px-4 py-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium text-gray-800">{p.km.toLocaleString()} km</span>
+                    {p.descripcion && <span className="text-gray-500 ml-2">— {p.descripcion}</span>}
+                    {p.litros && (
+                      <span className="ml-2 text-blue-600 text-xs font-medium">
+                        ⛽ {p.litros} L{p.comprobanteRef ? ` · ${p.comprobanteRef}` : ""}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                    <span className="text-gray-400 text-xs">{fmtFecha(p.fecha)}</span>
+                    <button
+                      onClick={async () => {
+                        if (!confirm("¿Eliminar esta parada?")) return
+                        await fetch(`/api/flota/solicitudes/${solicitudId}/bitacora/parada`, {
+                          method: "DELETE",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ paradaId: p.id }),
+                        })
+                        onDone()
+                      }}
+                      className="text-red-400 hover:text-red-600"
+                    >✕</button>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
         )}
+
+        {/* Formulario nueva parada */}
         <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Registrar parada</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Km al momento</label>
-              <input type="number" inputMode="numeric" value={cargaForm.kmAlMomento}
-                onChange={(e) => setCargaForm((f) => ({ ...f, kmAlMomento: e.target.value }))}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+              <label className="block text-xs text-gray-500 mb-1">Km actual *</label>
+              <input type="number" inputMode="numeric" value={paradaForm.km}
+                onChange={(e) => setParadaForm((f) => ({ ...f, km: e.target.value }))}
+                placeholder={String(bitacora.kmSalida + 1)}
+                className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Litros cargados</label>
-              <input type="number" inputMode="decimal" value={cargaForm.litros}
-                onChange={(e) => setCargaForm((f) => ({ ...f, litros: e.target.value }))}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+              <label className="block text-xs text-gray-500 mb-1">Motivo (opcional)</label>
+              <input value={paradaForm.descripcion}
+                onChange={(e) => setParadaForm((f) => ({ ...f, descripcion: e.target.value }))}
+                placeholder="Ej: Almuerzo, gestión, etc."
+                className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
             </div>
           </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">N° comprobante (opcional)</label>
-            <input value={cargaForm.comprobanteRef}
-              onChange={(e) => setCargaForm((f) => ({ ...f, comprobanteRef: e.target.value }))}
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
-          </div>
-          <button onClick={agregarCarga} disabled={loading}
+
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" checked={mostrarCombustible}
+              onChange={(e) => setMostrarCombustible(e.target.checked)}
+              className="accent-blue-600 w-4 h-4" />
+            <span className="text-sm text-gray-600">⛽ Incluir carga de combustible</span>
+          </label>
+
+          {mostrarCombustible && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Litros *</label>
+                <input type="number" inputMode="decimal" value={paradaForm.litros}
+                  onChange={(e) => setParadaForm((f) => ({ ...f, litros: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">N° comprobante</label>
+                <input value={paradaForm.comprobanteRef}
+                  onChange={(e) => setParadaForm((f) => ({ ...f, comprobanteRef: e.target.value }))}
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+              </div>
+            </div>
+          )}
+
+          <button onClick={agregarParada} disabled={loading}
             className="w-full bg-gray-700 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors">
-            + Agregar carga
+            + Agregar parada
           </button>
         </div>
       </div>
@@ -444,7 +497,7 @@ function PasoCierre({ solicitudId, bitacora, onDone }: {
   const [error, setError] = useState("")
 
   const kmRecorridos = (bitacora.kmLlegada ?? 0) - bitacora.kmSalida
-  const totalLitros = bitacora.cargas.reduce((s, c) => s + c.litros, 0)
+  const totalLitros = bitacora.paradas.reduce((s, p) => s + (p.litros ?? 0), 0)
 
   const handleCierre = async () => {
     if (!confirm("¿Cerrar el proceso? Esta acción es irreversible y no podrá modificarse.")) return
@@ -701,7 +754,7 @@ export default function SolicitudDetallePage() {
             )}
 
             {/* PASO 2: Checklist */}
-            {paso === 2 && <PasoChecklist solicitudId={solicitud.id} onDone={cargar} />}
+            {paso === 2 && <PasoChecklist solicitudId={solicitud.id} vehiculo={solicitud.vehiculo} onDone={cargar} />}
 
             {/* PASO 3: Orden de servicio */}
             {paso === 3 && <PasoOrden solicitudId={solicitud.id} onDone={cargar} />}
@@ -797,7 +850,7 @@ export default function SolicitudDetallePage() {
                     </div>
                     <div className="bg-gray-50 rounded-lg p-3">
                       <p className="text-xl font-bold text-gray-800">
-                        {solicitud.bitacora.cargas.reduce((s, c) => s + c.litros, 0).toFixed(1)}
+                        {solicitud.bitacora.paradas.reduce((s, p) => s + (p.litros ?? 0), 0).toFixed(1)}
                       </p>
                       <p className="text-xs text-gray-500">litros cargados</p>
                     </div>
