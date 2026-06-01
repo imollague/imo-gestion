@@ -312,7 +312,8 @@ model MantencionVehiculo {
 - [x] Hardening: validaciones km, estado vehículo, alertas por rol, tipos TypeScript
 
 ### Fase 2 — Mantenciones y reportes
-- [ ] Registro de mantenciones
+- [ ] Registro de mantenciones (modelo MantencionVehiculo ya existe en schema)
+- [ ] Reporte consumo combustible mensual por vehículo (datos ya en ParadaViaje)
 - [ ] Reporte costo mensual por vehículo (combustible + mantención)
 - [ ] Exportación Excel/PDF
 
@@ -322,6 +323,11 @@ model MantencionVehiculo {
 - [ ] Historial por conductor/funcionario
 - [ ] Integración FK Funcionario cuando RRHH esté migrado
 - [ ] Vista del checklist completado en detalle de solicitud (auditoría)
+
+### Tareas de seguridad y UX pendientes
+- [ ] **Seguridad:** validar en API GET /solicitudes/[id] que FLOTA solo vea sus propias solicitudes (actualmente cualquier FLOTA puede acceder por URL directa a solicitudes ajenas)
+- [ ] **Notificaciones:** avisar al conductor cuando su solicitud es aprobada/rechazada (email o push) — actualmente debe revisar manualmente
+- [ ] **Reporte combustible:** resumen mensual litros/viajes por vehículo (datos disponibles en ParadaViaje.litros)
 
 ---
 
