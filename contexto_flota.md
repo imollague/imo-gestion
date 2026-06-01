@@ -1,7 +1,7 @@
 # Módulo Gestión de Flota
-> **Estado:** Fase 1 completa, probada y revisada — pendiente merge a main y deploy
-> **Rama:** `modulo/flota`
-> **Rol requerido:** `FLOTA` (conductor / encargado) + `ADMIN`
+> **Estado:** En producción (main). Fase 1 completa + extensiones post-lanzamiento aplicadas.
+> **Rama activa:** `main` (modulo/flota mergeada)
+> **Roles:** `FLOTA` (Conductor) · `ENCARGADO` (Encargado de Vehículos) · `ADMIN`
 
 Gestión del parque vehicular municipal: vehículos, proceso de uso digital (solicitud → aprobación → checklist → orden de servicio → bitácora → cierre), mantenciones y alertas documentales.
 
@@ -301,11 +301,15 @@ model MantencionVehiculo {
 - [x] Solicitud de uso + aprobación/rechazo
 - [x] Checklist digital (20 ítems en 5 categorías, seed en prisma/seed-checklist.ts)
 - [x] Orden de Servicio + confirmación + PDF descargable (pasos 3 y 4 del stepper)
-- [x] Bitácora: km salida, cargas de combustible múltiples, km llegada
+- [x] Bitácora: km salida, paradas múltiples (km + motivo + combustible opcional), km llegada
 - [x] Cierre de proceso (inmutable, auto-registra en hoja de vida)
 - [x] Links en campana de alertas (vencidos en rojo, por vencer en amarillo)
-- [x] Rol `FLOTA` agregado a administración de usuarios (src/lib/roles.ts — fuente única de verdad)
-- [x] Revisión y hardening pre-merge: import Role corregido en next-auth.d.ts, alertas campana filtradas por rol, validación km llegada > km salida (API + frontend), validación estado OPERATIVO en API, confirm al cerrar proceso
+- [x] Roles FLOTA (Conductor) + ENCARGADO (Encargado Vehículos) en src/lib/roles.ts
+- [x] ENCARGADO: aprueba/rechaza, firma OS, crea vehículos, ve todas las solicitudes
+- [x] Imagen por vehículo (upload/delete Supabase Storage, visible en checklist)
+- [x] Observaciones en todos los ítems checklist (obligatoria para NO OK)
+- [x] Navbar responsive con hamburger menu móvil
+- [x] Hardening: validaciones km, estado vehículo, alertas por rol, tipos TypeScript
 
 ### Fase 2 — Mantenciones y reportes
 - [ ] Registro de mantenciones
