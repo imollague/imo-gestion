@@ -136,8 +136,9 @@ export default function VehiculoDetallePage() {
   const cargarVehiculo = useCallback(() => {
     if (!session) return
     fetch(`/api/flota/vehiculos/${id}`)
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error(); return r.json() })
       .then((d) => { setVehiculo(d); setCargando(false) })
+      .catch(() => { setCargando(false) })
   }, [session, id])
 
   useEffect(() => { cargarVehiculo() }, [cargarVehiculo])
@@ -194,8 +195,8 @@ export default function VehiculoDetallePage() {
                     if (!file) return
                     const fd = new FormData()
                     fd.append("archivo", file)
-                    await fetch(`/api/flota/vehiculos/${vehiculo.id}/imagen`, { method: "POST", body: fd })
-                    cargarVehiculo()
+                    const res = await fetch(`/api/flota/vehiculos/${vehiculo.id}/imagen`, { method: "POST", body: fd })
+                    if (res.ok) cargarVehiculo()
                     e.target.value = ""
                   }}
                   className="w-full text-xs text-gray-600 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
@@ -204,8 +205,8 @@ export default function VehiculoDetallePage() {
                   <button
                     onClick={async () => {
                       if (!confirm("¿Eliminar la imagen del vehículo?")) return
-                      await fetch(`/api/flota/vehiculos/${vehiculo.id}/imagen`, { method: "DELETE" })
-                      cargarVehiculo()
+                      const res = await fetch(`/api/flota/vehiculos/${vehiculo.id}/imagen`, { method: "DELETE" })
+                      if (res.ok) cargarVehiculo()
                     }}
                     className="mt-1 text-xs text-red-400 hover:text-red-600"
                   >Eliminar imagen</button>

@@ -386,12 +386,12 @@ function PasoBitacora({ solicitudId, bitacora, onDone }: {
                     <button
                       onClick={async () => {
                         if (!confirm("¿Eliminar esta parada?")) return
-                        await fetch(`/api/flota/solicitudes/${solicitudId}/bitacora/parada`, {
+                        const res = await fetch(`/api/flota/solicitudes/${solicitudId}/bitacora/parada`, {
                           method: "DELETE",
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({ paradaId: p.id }),
                         })
-                        onDone()
+                        if (res.ok) onDone()
                       }}
                       className="text-red-400 hover:text-red-600"
                     >✕</button>
@@ -565,36 +565,37 @@ export default function SolicitudDetallePage() {
   const cargar = useCallback(() => {
     if (!session) return
     fetch(`/api/flota/solicitudes/${id}`)
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error(); return r.json() })
       .then((d) => { setSolicitud(d); setCargando(false) })
+      .catch(() => { setCargando(false) })
   }, [session, id])
 
   useEffect(() => { cargar() }, [cargar])
 
   const aprobar = async () => {
     setLoadingAction(true)
-    await fetch(`/api/flota/solicitudes/${id}/aprobar`, { method: "POST" })
+    const res = await fetch(`/api/flota/solicitudes/${id}/aprobar`, { method: "POST" })
     setLoadingAction(false)
-    cargar()
+    if (res.ok) cargar()
   }
 
   const rechazar = async () => {
     if (!motivoRechazo.trim()) return
     setLoadingAction(true)
-    await fetch(`/api/flota/solicitudes/${id}/rechazar`, {
+    const res = await fetch(`/api/flota/solicitudes/${id}/rechazar`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ motivo: motivoRechazo }),
     })
     setLoadingAction(false)
-    cargar()
+    if (res.ok) cargar()
   }
 
   const firmarOrden = async () => {
     setLoadingAction(true)
-    await fetch(`/api/flota/solicitudes/${id}/orden/firmar`, { method: "POST" })
+    const res = await fetch(`/api/flota/solicitudes/${id}/orden/firmar`, { method: "POST" })
     setLoadingAction(false)
-    cargar()
+    if (res.ok) cargar()
   }
 
   const role = session?.user?.role
