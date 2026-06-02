@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireRole } from "@/lib/apiAuth"
-import { supabaseStorage, BUCKET } from "@/lib/supabase-storage"
+import { uploadFile, deleteFile, extractStoragePath } from "@/lib/storage"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
@@ -20,31 +20,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const ext = archivo.name.split(".").pop()?.toLowerCase() ?? "bin"
-  const nombreArchivo = `vehiculos/${vehiculoId}/${Date.now()}-${nombre.replace(/[^a-z0-9]/gi, "_")}.${ext}`
-
+  const storagePath = `vehiculos/${vehiculoId}/${Date.now()}-${nombre.replace(/[^a-z0-9]/gi, "_")}.${ext}`
   const buffer = Buffer.from(await archivo.arrayBuffer())
 
-  const { error: uploadError } = await supabaseStorage.storage
-    .from(BUCKET)
-    .upload(nombreArchivo, buffer, {
-      contentType: archivo.type,
-      upsert: false,
-    })
-
-  if (uploadError) {
-    return NextResponse.json({ error: `Error al subir archivo: ${uploadError.message}` }, { status: 500 })
-  }
-
-  const { data: { publicUrl } } = supabaseStorage.storage
-    .from(BUCKET)
-    .getPublicUrl(nombreArchivo)
+  const { publicUrl, error } = await uploadFile(storagePath, buffer, archivo.type)
+  if (error) return NextResponse.json({ error: `Error al subir archivo: ${error}` }, { status: 500 })
 
   const documento = await prisma.documentoVehiculo.create({
     data: {
       vehiculoId,
       nombre,
       tipo,
-      url: publicUrl,
+      url: publicUrl!,
       subidoPorId: parseInt(auth.session.user.id),
     },
   })
@@ -52,11 +39,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   return NextResponse.json(documento, { status: 201 })
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, _ctx: { params: Promise<{ id: string }> }) {
   const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
   if (!auth.ok) return auth.response
 
-  const { id } = await params
   const { documentoId } = await req.json()
 
   const doc = await prisma.documentoVehiculo.findUnique({
@@ -64,11 +50,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   })
   if (!doc) return NextResponse.json({ error: "No encontrado" }, { status: 404 })
 
-  // Extraer path del bucket desde la URL pública
-  const urlParts = doc.url.split(`/${BUCKET}/`)
-  if (urlParts.length === 2) {
-    await supabaseStorage.storage.from(BUCKET).remove([urlParts[1]])
-  }
+  const storagePath = extractStoragePath(doc.url)
+  if (storagePath) await deleteFile(storagePath)
 
   await prisma.documentoVehiculo.delete({ where: { id: parseInt(documentoId) } })
   return NextResponse.json({ ok: true })

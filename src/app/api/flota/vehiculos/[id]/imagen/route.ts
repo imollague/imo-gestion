@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireRole } from "@/lib/apiAuth"
-import { supabaseStorage, BUCKET } from "@/lib/supabase-storage"
+import { uploadFile, deleteFile, extractStoragePath } from "@/lib/storage"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRole("ADMIN", "ENCARGADO")
@@ -12,25 +12,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const formData = await req.formData()
   const archivo = formData.get("archivo") as File | null
-
-  if (!archivo) {
-    return NextResponse.json({ error: "Archivo requerido" }, { status: 400 })
-  }
+  if (!archivo) return NextResponse.json({ error: "Archivo requerido" }, { status: 400 })
 
   const ext = archivo.name.split(".").pop()?.toLowerCase() ?? "jpg"
-  const path = `vehiculos/${vehiculoId}/imagen.${ext}`
+  const storagePath = `vehiculos/${vehiculoId}/imagen.${ext}`
   const buffer = Buffer.from(await archivo.arrayBuffer())
 
   // Eliminar imagen anterior si existe
-  await supabaseStorage.storage.from(BUCKET).remove([path])
+  const vehiculoActual = await prisma.vehiculo.findUnique({ where: { id: vehiculoId } })
+  if (vehiculoActual?.imagenUrl) {
+    const oldPath = extractStoragePath(vehiculoActual.imagenUrl)
+    if (oldPath) await deleteFile(oldPath)
+  }
 
-  const { error } = await supabaseStorage.storage.from(BUCKET).upload(path, buffer, {
-    contentType: archivo.type,
-    upsert: true,
-  })
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  const { data: { publicUrl } } = supabaseStorage.storage.from(BUCKET).getPublicUrl(path)
+  const { publicUrl, error } = await uploadFile(storagePath, buffer, archivo.type)
+  if (error) return NextResponse.json({ error }, { status: 500 })
 
   const vehiculo = await prisma.vehiculo.update({
     where: { id: vehiculoId },
@@ -49,10 +45,8 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
 
   const vehiculo = await prisma.vehiculo.findUnique({ where: { id: vehiculoId } })
   if (vehiculo?.imagenUrl) {
-    const urlParts = vehiculo.imagenUrl.split(`/${BUCKET}/`)
-    if (urlParts.length === 2) {
-      await supabaseStorage.storage.from(BUCKET).remove([urlParts[1]])
-    }
+    const storagePath = extractStoragePath(vehiculo.imagenUrl)
+    if (storagePath) await deleteFile(storagePath)
   }
 
   await prisma.vehiculo.update({ where: { id: vehiculoId }, data: { imagenUrl: null } })

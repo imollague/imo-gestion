@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: imo-postgres
+    environment:
+      POSTGRES_USER: imo
+      POSTGRES_PASSWORD: imo_dev
+      POSTGRES_DB: imo_stock
+    ports:
+      - "5432:5432"
+    volumes:
+      - imo_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  imo_postgres_data:
