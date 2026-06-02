@@ -1,6 +1,6 @@
 # Módulo Gestión de Flota
-> **Estado:** En producción (main). Fase 1 completa + extensiones post-lanzamiento aplicadas.
-> **Rama activa:** `main` (modulo/flota mergeada)
+> **Estado:** En producción (main). Fase 1 completa + extensiones aplicadas. Rama `modulo/flota` activa para desarrollo.
+> **Rama activa desarrollo:** `modulo/flota` (rebased sobre main 2026-06-02)
 > **Roles:** `FLOTA` (Conductor) · `ENCARGADO` (Encargado de Vehículos) · `ADMIN`
 
 Gestión del parque vehicular municipal: vehículos, proceso de uso digital (solicitud → aprobación → checklist → orden de servicio → bitácora → cierre), mantenciones y alertas documentales.
@@ -325,9 +325,17 @@ model MantencionVehiculo {
 - [ ] Vista del checklist completado en detalle de solicitud (auditoría)
 
 ### Tareas de seguridad y UX pendientes
-- [ ] **Seguridad:** validar en API GET /solicitudes/[id] que FLOTA solo vea sus propias solicitudes (actualmente cualquier FLOTA puede acceder por URL directa a solicitudes ajenas)
-- [ ] **Notificaciones:** avisar al conductor cuando su solicitud es aprobada/rechazada (email o push) — actualmente debe revisar manualmente
-- [ ] **Reporte combustible:** resumen mensual litros/viajes por vehículo (datos disponibles en ParadaViaje.litros)
+- [ ] **Seguridad:** validar en API GET /solicitudes/[id] que FLOTA solo vea sus propias solicitudes
+- [ ] **Notificaciones:** avisar al conductor cuando su solicitud es aprobada/rechazada
+- [ ] **Reporte combustible:** resumen mensual litros/viajes por vehículo (datos en ParadaViaje.litros)
+- [ ] **UI móvil:** corregir errores visuales en móvil (pendiente pruebas con entorno local)
+
+### Entorno de desarrollo local — EN PROGRESO
+- Docker Desktop recién instalado (2026-06-02), pendiente configurar tras reinicio
+- **Plan:** docker-compose.yml con PostgreSQL local + .env.local con variables locales
+- **Storage local:** reemplazar Supabase Storage con filesystem local (`public/uploads/`) en dev
+- **Objetivo:** poder iterar UI sin internet ni deploy a Vercel
+- `.env.local` creado con `NEXTAUTH_URL=http://localhost:3000` (en .gitignore)
 
 ---
 
