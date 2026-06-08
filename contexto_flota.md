@@ -330,8 +330,8 @@ model MantencionVehiculo {
 - [ ] **Reporte combustible:** resumen mensual litros/viajes por vehículo (datos en ParadaViaje.litros)
 - [ ] **UI móvil:** corregir errores visuales en móvil (pendiente pruebas con entorno local)
 
-### Entorno de desarrollo local — EN PROGRESO
-- Docker Desktop recién instalado (2026-06-02), pendiente configurar tras reinicio
+### Entorno de desarrollo local — CONFIGURADO
+- Docker Desktop instalado. docker-compose.yml + .env.local configurados y funcionando
 - **Plan:** docker-compose.yml con PostgreSQL local + .env.local con variables locales
 - **Storage local:** reemplazar Supabase Storage con filesystem local (`public/uploads/`) en dev
 - **Objetivo:** poder iterar UI sin internet ni deploy a Vercel

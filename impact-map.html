@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Impact Map — Sistema IMO · Municipalidad de Ollagüe</title>
+<style>
+  :root {
+    --done: #16a34a;
+    --done-bg: #dcfce7;
+    --progress: #d97706;
+    --progress-bg: #fef3c7;
+    --planned: #6b7280;
+    --planned-bg: #f3f4f6;
+    --goal: #1e40af;
+    --goal-bg: #dbeafe;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f8fafc; color: #1e293b; }
+
+  /* Header */
+  header { background: linear-gradient(135deg, #1e3a5f 0%, #1e40af 100%); color: white; padding: 2rem 2.5rem; }
+  header h1 { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em; }
+  header p { margin-top: 0.375rem; opacity: 0.8; font-size: 0.95rem; }
+  .header-meta { display: flex; gap: 2rem; margin-top: 1.25rem; flex-wrap: wrap; }
+  .meta-item { display: flex; flex-direction: column; gap: 0.125rem; }
+  .meta-item .label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.65; }
+  .meta-item .value { font-size: 0.9rem; font-weight: 600; }
+
+  /* Legend */
+  .legend { display: flex; gap: 1.5rem; padding: 0.875rem 2.5rem; background: white; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; font-weight: 500; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+  /* Main layout */
+  main { padding: 2rem 2.5rem; max-width: 1400px; margin: 0 auto; }
+
+  /* Goal box */
+  .goal-box { background: var(--goal-bg); border: 2px solid var(--goal); border-radius: 1rem; padding: 1.5rem 2rem; margin-bottom: 2rem; text-align: center; }
+  .goal-box .goal-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--goal); font-weight: 700; margin-bottom: 0.5rem; }
+  .goal-box h2 { font-size: 1.25rem; font-weight: 700; color: var(--goal); line-height: 1.4; }
+  .goal-box p { margin-top: 0.5rem; font-size: 0.875rem; color: #3b82f6; }
+
+  /* Grid de actores */
+  .actors-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem; }
+
+  /* Tarjeta actor */
+  .actor-card { background: white; border-radius: 1rem; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06); }
+  .actor-header { padding: 1rem 1.25rem; display: flex; align-items: center; gap: 0.75rem; }
+  .actor-icon { font-size: 1.5rem; width: 2.5rem; height: 2.5rem; display: flex; align-items: center; justify-content: center; border-radius: 0.5rem; }
+  .actor-name { font-weight: 700; font-size: 0.95rem; }
+  .actor-role { font-size: 0.72rem; margin-top: 0.1rem; opacity: 0.7; }
+  .actor-body { padding: 0 1.25rem 1.25rem; }
+
+  /* Impacto */
+  .impact { margin-bottom: 1rem; }
+  .impact-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 700; color: #64748b; margin-bottom: 0.375rem; display: flex; align-items: center; gap: 0.4rem; }
+  .impact-label::before { content: '→'; color: #94a3b8; }
+
+  /* Deliverables */
+  .deliverables { display: flex; flex-direction: column; gap: 0.3rem; padding-left: 0.75rem; border-left: 2px solid #e2e8f0; }
+  .deliverable { display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.82rem; padding: 0.35rem 0.5rem; border-radius: 0.375rem; }
+  .deliverable .status-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 0.2rem; flex-shrink: 0; }
+  .deliverable.done { background: var(--done-bg); color: #166534; }
+  .deliverable.done .status-dot { background: var(--done); }
+  .deliverable.progress { background: var(--progress-bg); color: #92400e; }
+  .deliverable.progress .status-dot { background: var(--progress); }
+  .deliverable.planned { background: var(--planned-bg); color: #374151; }
+  .deliverable.planned .status-dot { background: var(--planned); }
+
+  /* Colors por actor */
+  .actor-admin .actor-header { background: #1e40af; color: white; }
+  .actor-admin .actor-icon { background: rgba(255,255,255,0.15); }
+  .actor-encargado .actor-header { background: #0369a1; color: white; }
+  .actor-encargado .actor-icon { background: rgba(255,255,255,0.15); }
+  .actor-conductor .actor-header { background: #0f766e; color: white; }
+  .actor-conductor .actor-icon { background: rgba(255,255,255,0.15); }
+  .actor-bodega .actor-header { background: #7c3aed; color: white; }
+  .actor-bodega .actor-icon { background: rgba(255,255,255,0.15); }
+  .actor-farmacia .actor-header { background: #be185d; color: white; }
+  .actor-farmacia .actor-icon { background: rgba(255,255,255,0.15); }
+  .actor-rrhh .actor-header { background: #b45309; color: white; }
+  .actor-rrhh .actor-icon { background: rgba(255,255,255,0.15); }
+  .actor-control .actor-header { background: #374151; color: white; }
+  .actor-control .actor-icon { background: rgba(255,255,255,0.15); }
+  .actor-alcalde .actor-header { background: #9f1239; color: white; }
+  .actor-alcalde .actor-icon { background: rgba(255,255,255,0.15); }
+
+  /* Módulos section */
+  .modules-section { margin-top: 3rem; }
+  .section-title { font-size: 1rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 1.25rem; padding-bottom: 0.5rem; border-bottom: 2px solid #e2e8f0; }
+  .modules-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+  .module-card { background: white; border-radius: 0.75rem; padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border-left: 4px solid; }
+  .module-card.done { border-color: var(--done); }
+  .module-card.progress { border-color: var(--progress); }
+  .module-card.planned { border-color: var(--planned); }
+  .module-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
+  .module-name { font-weight: 700; font-size: 0.95rem; }
+  .module-badge { font-size: 0.7rem; padding: 0.2rem 0.6rem; border-radius: 999px; font-weight: 600; }
+  .module-badge.done { background: var(--done-bg); color: var(--done); }
+  .module-badge.progress { background: var(--progress-bg); color: var(--progress); }
+  .module-badge.planned { background: var(--planned-bg); color: var(--planned); }
+  .module-items { display: flex; flex-direction: column; gap: 0.25rem; }
+  .module-item { font-size: 0.8rem; display: flex; gap: 0.4rem; color: #475569; }
+  .module-item::before { content: '·'; }
+
+  /* Próximas historias */
+  .stories-section { margin-top: 3rem; }
+  .stories-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
+  .story-card { background: white; border-radius: 0.75rem; padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .story-card .story-id { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #94a3b8; margin-bottom: 0.25rem; }
+  .story-card .story-title { font-weight: 700; font-size: 0.9rem; color: #1e293b; margin-bottom: 0.4rem; }
+  .story-card .story-desc { font-size: 0.8rem; color: #64748b; line-height: 1.5; }
+  .story-card .story-tags { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.625rem; }
+  .tag { font-size: 0.68rem; padding: 0.15rem 0.5rem; border-radius: 999px; background: #f1f5f9; color: #475569; font-weight: 500; }
+  .story-priority { display: inline-block; font-size: 0.68rem; padding: 0.15rem 0.5rem; border-radius: 999px; font-weight: 600; margin-bottom: 0.5rem; }
+  .priority-alta { background: #fee2e2; color: #dc2626; }
+  .priority-media { background: #fef3c7; color: #d97706; }
+  .priority-baja { background: #f1f5f9; color: #64748b; }
+
+  footer { margin-top: 3rem; padding: 1.5rem 2.5rem; border-top: 1px solid #e2e8f0; background: white; text-align: center; font-size: 0.8rem; color: #94a3b8; }
+
+  @media print {
+    .actor-card, .module-card, .story-card { break-inside: avoid; }
+    body { background: white; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Impact Map — Sistema IMO</h1>
+  <p>Municipalidad de Ollagüe · Plataforma de Gestión Municipal Integrada</p>
+  <div class="header-meta">
+    <div class="meta-item">
+      <span class="label">Fecha</span>
+      <span class="value">Junio 2026</span>
+    </div>
+    <div class="meta-item">
+      <span class="label">Stack</span>
+      <span class="value">Next.js 16 · PostgreSQL · Vercel</span>
+    </div>
+    <div class="meta-item">
+      <span class="label">Módulos en producción</span>
+      <span class="value">Bodega · Farmacia · Flota</span>
+    </div>
+    <div class="meta-item">
+      <span class="label">En desarrollo</span>
+      <span class="value">RRHH</span>
+    </div>
+  </div>
+</header>
+
+<div class="legend">
+  <div class="legend-item"><div class="dot" style="background:var(--done)"></div> Implementado</div>
+  <div class="legend-item"><div class="dot" style="background:var(--progress)"></div> En desarrollo</div>
+  <div class="legend-item"><div class="dot" style="background:var(--planned)"></div> Planificado</div>
+</div>
+
+<main>
+
+  <!-- GOAL -->
+  <div class="goal-box">
+    <div class="goal-label">Objetivo del sistema</div>
+    <h2>Digitalizar la gestión operativa municipal de Ollagüe, eliminando el papel,<br>mejorando la trazabilidad y habilitando auditoría en tiempo real.</h2>
+    <p>Reducir errores, acelerar procesos y entregar información confiable a directivos sin depender de registros físicos.</p>
+  </div>
+
+  <!-- ACTORES E IMPACTOS -->
+  <div class="section-title">Actores · Impactos · Entregables</div>
+  <div class="actors-grid">
+
+    <!-- ADMIN -->
+    <div class="actor-card actor-admin">
+      <div class="actor-header">
+        <div class="actor-icon">👤</div>
+        <div>
+          <div class="actor-name">Administrador Municipal</div>
+          <div class="actor-role">Rol: ADMIN · 2 usuarios</div>
+        </div>
+      </div>
+      <div class="actor-body">
+        <div class="impact">
+          <div class="impact-label">Tener visibilidad total del sistema</div>
+          <div class="deliverables">
+            <div class="deliverable done"><div class="status-dot"></div>Dashboard con KPIs de bodega, farmacia y flota</div>
+            <div class="deliverable done"><div class="status-dot"></div>Registro de actividad por usuario</div>
+            <div class="deliverable done"><div class="status-dot"></div>Alertas de stock bajo y docs vencidos</div>
+          </div>
+        </div>
+        <div class="impact">
+          <div class="impact-label">Gestionar usuarios y accesos</div>
+          <div class="deliverables">
+            <div class="deliverable done"><div class="status-dot"></div>CRUD usuarios con roles diferenciados</div>
+            <div class="deliverable done"><div class="status-dot"></div>Subrogancia temporal con expiración automática</div>
+          </div>
+        </div>
+        <div class="impact">
+          <div class="impact-label">Autorizar procesos críticos</div>
+          <div class="deliverables">
+            <div class="deliverable done"><div class="status-dot"></div>Aprobar/rechazar solicitudes de vehículos</div>
+            <div class="deliverable done"><div class="status-dot"></div>Firmar Órdenes de Servicio</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ALCALDE -->
+    <div class="actor-card actor-alcalde">
+      <div class="actor-header">
+        <div class="actor-icon">🏛️</div>
+        <div>
+          <div class="actor-name">Alcalde / Subrogante</div>
+          <div class="actor-role">Rol: ADMIN (subrogancia) · 1 usuario</div>
+        </div>
+      </div>
+      <div class="actor-body">
+        <div class="impact">
+          <div class="impact-label">Autorizar uso de vehículos municipales</div>
+          <div class="deliverables">
+            <div class="deliverable done"><div class="status-dot"></div>Vista de solicitudes pendientes de aprobación</div>
+            <div class="deliverable done"><div class="status-dot"></div>Firma digital de Orden de Servicio (con timestamp)</div>
+            <div class="deliverable done"><div class="status-dot"></div>PDF descargable de OS para FEDOKS</div>
+          </div>
+        </div>
+        <div class="impact">
+          <div class="impact-label">Tomar decisiones basadas en datos</div>
+          <div class="deliverables">
+            <div class="deliverable done"><div class="status-dot"></div>Dashboard con estado actual de la flota</div>
+            <div class="deliverable planned"><div class="status-dot"></div>Reporte mensual de costos operativos flota</div>
+            <div class="deliverable planned"><div class="status-dot"></div>Reportes RRHH (horas extras, costos por unidad)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ENCARGADO FLOTA -->
+    <div class="actor-card actor-encargado">
+      <div class="actor-header">
+        <div class="actor-icon">🚛</div>
+        <div>
+          <div class="actor-name">Encargado de Vehículos</div>
+          <div class="actor-role">Rol: ENCARGADO · 1 usuario</div>
+        </div>
+      </div>
+      <div class="actor-body">
+        <div class="impact">
+          <div class="impact-label">Mantener el parque vehicular en regla</div>
+          <div class="deliverables">
+            <div class="deliverable done"><div class="status-dot"></div>Panel de vehículos con alertas SOAP, permiso, rev. técnica</div>
+            <div class="deliverable done"><div class="status-dot"></div>Adjuntar documentos al vehículo (Supabase Storage)</div>
+            <div class="deliverable done"><div class="status-dot"></div>Foto del vehículo visible en checklist</div>
+            <div class="deliverable planned"><div class="status-dot"></div>Registro de mantenciones (modelo ya existe)</div>
+          </div>
+        </div>
+        <div class="impact">
+          <div class="impact-label">Controlar el uso de vehículos</div>
+          <div class="deliverables">
+            <div class="deliverable done"><div class="status-dot"></div>Vista de todas las solicitudes activas e históricas</div>
+            <div class="deliverable done"><div class="status-dot"></div>Hoja de vida por vehículo (timeline de uso)</div>
+            <div class="deliverable done"><div class="status-dot"></div>Aprobar/rechazar solicitudes de uso</div>
+          </div>
+        </div>
+        <div class="impact">
+          <div class="impact-label">Generar reportes para directivos</div>
+          <div class="deliverables">
+            <div class="deliverable planned"><div class="status-dot"></div>Reporte consumo combustible mensual por vehículo</div>
+            <div class="deliverable planned"><div class="status-dot"></div>Reporte costo total por vehículo (combustible + mantención)</div>
+            <div class="deliverable planned"><div class="status-dot"></div>Exportación Excel/PDF</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONDUCTOR -->
+    <div class="actor-card actor-conductor">
+      <div class="actor-header">
+        <div class="actor-icon">🚗</div>
+        <div>
+          <div class="actor-name">Conductor Municipal</div>
+          <div class="actor-role">Rol: FLOTA · ~8 usuarios · 50+ años</div>
+        </div>
+      </div>
+      <div class="actor-body">
+        <div class="impact">
+          <div class="impact-label">Solicitar y usar un vehículo sin papel</div>
+          <div class="deliverables">
+            <div class="deliverable done"><div class="status-dot"></div>Solicitud digital (vehículo + destino + propósito)</div>
+            <div class="deliverable done"><div class="status-dot"></div>Checklist digital con foto del vehículo</div>
+            <div class="deliverable done"><div class="status-dot"></div>Observaciones por ítem del checklist</div>
+            <div class="deliverable done"><div class="status-dot"></div>Orden de Servicio autogenerada (descargable como PDF)</div>
+          </div>
+        </div>
+        <div class="impact">
+          <div class="impact-label">Registrar el viaje en tiempo real desde el celular</div>
+          <div class="deliverables">
+            <div class="deliverable done"><div class="status-dot"></div>Registro km salida con teclado numérico grande</div>
+            <div class="deliverable done"><div class="status-dot"></div>Paradas del viaje (km + motivo + combustible opcional)</div>
+            <div class="deliverable done"><div class="status-dot"></div>Registro km llegada con validación de coherencia</div>
+            <div class="deliverable done"><div class="status-dot"></div>Cierre inmutable con resumen del viaje</div>
+          </div>
+        </div>
+        <div class="impact">
+          <div class="impact-label">Saber en qué estado está su solicitud</div>
+          <div class="deliverables">
+            <div class="deliverable done"><div class="status-dot"></div>Stepper visual con etapa actual (5 pasos)</div>
+            <div class="deliverable done"><div class="status-dot"></div>Textos de estado claros ("Esperando aprobación", "Listo para salir")</div>
+            <div class="deliverable planned"><div class="status-dot"></div>Notificación al conductor cuando se aprueba/rechaza</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BODEGA -->
+    <div class="actor-card actor-bodega">
+      <div class="actor-header">
+        <div class="actor-icon">📦</div>
+        <div>
+          <div class="actor-name">Operador Bodega</div>
+          <div class="actor-role">Rol: BODEGA · 2 usuarios</div>
+        </div>
+      </div>
+      <div class="actor-body">
+        <div class="impact">
+          <div class="impact-label">Controlar el inventario municipal</div>
+          <div class="deliverables">
+            <div class="deliverable done"><div class="status-dot"></div>CRUD productos con categorías y stock mínimo</div>
+            <div class="deliverable done"><div class="status-dot"></div>Movimientos entrada/salida con trazabilidad</div>
+            <div class="deliverable done"><div class="status-dot"></div>Alertas de stock bajo en tiempo real</div>
+            <div class="deliverable done"><div class="status-dot"></div>Kardex por producto (historial completo)</div>
+          </div>
+        </div>
+        <div class="impact">
+          <div class="impact-label">Reportar el estado del inventario</div>
+          <div class="deliverables">
+            <div class="deliverable done"><div class="status-dot"></div>Exportación Excel/PDF de movimientos</div>
+            <div class="deliverable done"><div class="status-dot"></div>Historial de cambios por producto (SCD)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FARMACIA -->
+    <div class="actor-card actor-farmacia">
+      <div class="actor-header">
+        <div class="actor-icon">💊</div>
+        <div>
+          <div class="actor-name">Operador Farmacia</div>
+          <div class="actor-role">Rol: FARMACIA · 3–4 usuarios</div>
+        </div>
+      </div>
+      <div class="actor-body">
+        <div class="impact">
+          <div class="impact-label">Gestionar medicamentos por lote y vencimiento</div>
+          <div class="deliverables">
+            <div class="deliverable done"><div class="status-dot"></div>Control de stock por lote con fecha vencimiento</div>
+            <div class="deliverable done"><div class="status-dot"></div>Alerta automática 30 días antes de vencer</div>
+            <div class="deliverable done"><div class="status-dot"></div>Kardex por medicamento</div>
+          </div>
+        </div>
+        <div class="impact">
+          <div class="impact-label">Registrar despachos a pacientes</div>
+          <div class="deliverables">
+            <div class="deliverable done"><div class="status-dot"></div>Ficha de pacientes con RUT y datos de contacto</div>
+            <div class="deliverable done"><div class="status-dot"></div>Despacho vinculado al paciente y al medicamento</div>
+            <div class="deliverable done"><div class="status-dot"></div>Historial de retiros por paciente</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RRHH -->
+    <div class="actor-card actor-rrhh">
+      <div class="actor-header">
+        <div class="actor-icon">👥</div>
+        <div>
+          <div class="actor-name">Operador RRHH</div>
+          <div class="actor-role">Rol: RRHH · 2–3 usuarios · ~40 funcionarios</div>
+        </div>
+      </div>
+      <div class="actor-body">
+        <div class="impact">
+          <div class="impact-label">Gestionar el padrón de funcionarios</div>
+          <div class="deliverables">
+            <div class="deliverable progress"><div class="status-dot"></div>Ficha funcionario: RUT, grado, contrato, unidad</div>
+            <div class="deliverable progress"><div class="status-dot"></div>Tabla de grados y valor hora para cálculos</div>
+            <div class="deliverable progress"><div class="status-dot"></div>Soft delete — sin borrado físico de registros</div>
+          </div>
+        </div>
+        <div class="impact">
+          <div class="impact-label">Calcular y registrar horas extras</div>
+          <div class="deliverables">
+            <div class="deliverable progress"><div class="status-dot"></div>Registro HH.EE. vinculado a memo FEDOKS (folioMemo)</div>
+            <div class="deliverable progress"><div class="status-dot"></div>Cálculo automático tipo (diurno/nocturno/festivo) y valor</div>
+            <div class="deliverable progress"><div class="status-dot"></div>Calendario de feriados nacionales y locales</div>
+            <div class="deliverable planned"><div class="status-dot"></div>Licencias médicas y permisos administrativos</div>
+            <div class="deliverable planned"><div class="status-dot"></div>Control de vacaciones con cálculo de antigüedad</div>
+          </div>
+        </div>
+        <div class="impact">
+          <div class="impact-label">Generar reportes para decretos y auditoría</div>
+          <div class="deliverables">
+            <div class="deliverable planned"><div class="status-dot"></div>Resumen mensual HH.EE. por unidad</div>
+            <div class="deliverable planned"><div class="status-dot"></div>Costo estimado del período por grado</div>
+            <div class="deliverable planned"><div class="status-dot"></div>Exportación Excel/PDF para decretos</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTROL -->
+    <div class="actor-card actor-control">
+      <div class="actor-header">
+        <div class="actor-icon">🔍</div>
+        <div>
+          <div class="actor-name">Control Municipal</div>
+          <div class="actor-role">Rol: VIEWER / ADMIN según necesidad</div>
+        </div>
+      </div>
+      <div class="actor-body">
+        <div class="impact">
+          <div class="impact-label">Auditar todas las operaciones del sistema</div>
+          <div class="deliverables">
+            <div class="deliverable done"><div class="status-dot"></div>Historial de actividad por usuario</div>
+            <div class="deliverable done"><div class="status-dot"></div>Solicitudes flota inmutables post-cierre</div>
+            <div class="deliverable done"><div class="status-dot"></div>Hoja de vida del vehículo con timestamp de cada evento</div>
+            <div class="deliverable done"><div class="status-dot"></div>Registros con retención mínima 5 años (soft delete)</div>
+          </div>
+        </div>
+        <div class="impact">
+          <div class="impact-label">Validar uso de recursos municipales</div>
+          <div class="deliverables">
+            <div class="deliverable done"><div class="status-dot"></div>Trazabilidad completa bodega (quién, cuándo, qué)</div>
+            <div class="deliverable done"><div class="status-dot"></div>Checklist con respuestas guardadas por solicitud</div>
+            <div class="deliverable planned"><div class="status-dot"></div>Vista checklist completado en detalle de solicitud</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ESTADO DE MÓDULOS -->
+  <div class="modules-section">
+    <div class="section-title">Estado de Módulos</div>
+    <div class="modules-grid">
+
+      <div class="module-card done">
+        <div class="module-header">
+          <span class="module-name">📦 Bodega Municipal</span>
+          <span class="module-badge done">Producción</span>
+        </div>
+        <div class="module-items">
+          <div class="module-item">Inventario con categorías y stock mínimo</div>
+          <div class="module-item">Movimientos entrada/salida/ajuste</div>
+          <div class="module-item">Alertas de stock bajo (campana + email)</div>
+          <div class="module-item">Kardex y exportación Excel/PDF</div>
+          <div class="module-item">Historial de cambios (SCD)</div>
+        </div>
+      </div>
+
+      <div class="module-card done">
+        <div class="module-header">
+          <span class="module-name">💊 Farmacia Posta Rural</span>
+          <span class="module-badge done">Producción</span>
+        </div>
+        <div class="module-items">
+          <div class="module-item">Control por lote con fecha vencimiento</div>
+          <div class="module-item">Alertas 30 días antes de vencer</div>
+          <div class="module-item">Ficha de pacientes + historial retiros</div>
+          <div class="module-item">Kardex y exportación Excel/PDF</div>
+        </div>
+      </div>
+
+      <div class="module-card done">
+        <div class="module-header">
+          <span class="module-name">🚛 Gestión de Flota</span>
+          <span class="module-badge done">Producción</span>
+        </div>
+        <div class="module-items">
+          <div class="module-item">~15 vehículos con alertas documentales</div>
+          <div class="module-item">Flujo digital: solicitud → checklist → OS → bitácora → cierre</div>
+          <div class="module-item">Paradas de viaje con combustible opcional</div>
+          <div class="module-item">Roles: Conductor / Encargado / Admin</div>
+          <div class="module-item">PDF Orden de Servicio para FEDOKS</div>
+          <div class="module-item">Mobile-first (conductores 50+ años)</div>
+        </div>
+      </div>
+
+      <div class="module-card progress">
+        <div class="module-header">
+          <span class="module-name">👥 RRHH</span>
+          <span class="module-badge progress">En desarrollo</span>
+        </div>
+        <div class="module-items">
+          <div class="module-item">~40 funcionarios municipales</div>
+          <div class="module-item">Ficha funcionario con grado y contrato</div>
+          <div class="module-item">Horas extras con cálculo automático</div>
+          <div class="module-item">Integración con folio FEDOKS</div>
+          <div class="module-item">Licencias y vacaciones (Fase 2)</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- PRÓXIMAS HISTORIAS DE USUARIO -->
+  <div class="stories-section">
+    <div class="section-title">Historias de Usuario Priorizadas — Próximas iteraciones</div>
+    <div class="stories-grid">
+
+      <div class="story-card">
+        <div class="story-id">HU-RRHH-01</div>
+        <span class="story-priority priority-alta">Alta prioridad</span>
+        <div class="story-title">Registro de funcionario</div>
+        <div class="story-desc">Como operador RRHH, quiero registrar un funcionario con su RUT, grado, tipo de contrato y unidad para poder gestionar sus datos laborales en el sistema.</div>
+        <div class="story-tags">
+          <span class="tag">RRHH</span><span class="tag">Funcionarios</span><span class="tag">CRUD</span>
+        </div>
+      </div>
+
+      <div class="story-card">
+        <div class="story-id">HU-RRHH-02</div>
+        <span class="story-priority priority-alta">Alta prioridad</span>
+        <div class="story-title">Registro de horas extras</div>
+        <div class="story-desc">Como operador RRHH, quiero registrar horas extras vinculadas a un memo FEDOKS, indicando fecha, horas y funcionario, para que el sistema calcule automáticamente el tipo y valor.</div>
+        <div class="story-tags">
+          <span class="tag">RRHH</span><span class="tag">HH.EE.</span><span class="tag">FEDOKS</span>
+        </div>
+      </div>
+
+      <div class="story-card">
+        <div class="story-id">HU-FLOTA-01</div>
+        <span class="story-priority priority-alta">Alta prioridad</span>
+        <div class="story-title">Corrección de errores UI móvil</div>
+        <div class="story-desc">Como conductor, quiero que la interfaz de solicitudes y bitácora sea completamente usable desde mi celular para no depender de un computador en la municipalidad.</div>
+        <div class="story-tags">
+          <span class="tag">Flota</span><span class="tag">Mobile</span><span class="tag">UX</span>
+        </div>
+      </div>
+
+      <div class="story-card">
+        <div class="story-id">HU-FLOTA-02</div>
+        <span class="story-priority priority-alta">Alta prioridad</span>
+        <div class="story-title">Seguridad: solicitudes privadas</div>
+        <div class="story-desc">Como conductor, quiero que solo yo (y los administradores) pueda ver el detalle de mis solicitudes, para que otros conductores no puedan acceder a mi información.</div>
+        <div class="story-tags">
+          <span class="tag">Flota</span><span class="tag">Seguridad</span>
+        </div>
+      </div>
+
+      <div class="story-card">
+        <div class="story-id">HU-FLOTA-03</div>
+        <span class="story-priority priority-media">Media prioridad</span>
+        <div class="story-title">Notificación de aprobación</div>
+        <div class="story-desc">Como conductor, quiero recibir una notificación cuando mi solicitud sea aprobada o rechazada para no tener que entrar al sistema a revisar manualmente.</div>
+        <div class="story-tags">
+          <span class="tag">Flota</span><span class="tag">Notificaciones</span><span class="tag">Email</span>
+        </div>
+      </div>
+
+      <div class="story-card">
+        <div class="story-id">HU-FLOTA-04</div>
+        <span class="story-priority priority-media">Media prioridad</span>
+        <div class="story-title">Registro de mantenciones</div>
+        <div class="story-desc">Como encargado de vehículos, quiero registrar cada mantención realizada (tipo, taller, costo, km) para mantener el historial completo del vehículo y controlar los costos.</div>
+        <div class="story-tags">
+          <span class="tag">Flota</span><span class="tag">Mantenciones</span><span class="tag">Costos</span>
+        </div>
+      </div>
+
+      <div class="story-card">
+        <div class="story-id">HU-FLOTA-05</div>
+        <span class="story-priority priority-media">Media prioridad</span>
+        <div class="story-title">Reporte de consumo combustible</div>
+        <div class="story-desc">Como encargado, quiero ver un resumen mensual de litros cargados y km recorridos por vehículo para controlar el consumo y detectar anomalías.</div>
+        <div class="story-tags">
+          <span class="tag">Flota</span><span class="tag">Reportes</span><span class="tag">Combustible</span>
+        </div>
+      </div>
+
+      <div class="story-card">
+        <div class="story-id">HU-RRHH-03</div>
+        <span class="story-priority priority-media">Media prioridad</span>
+        <div class="story-title">Reporte mensual de horas extras</div>
+        <div class="story-desc">Como jefe RRHH, quiero generar un reporte mensual de horas extras por unidad con el costo estimado para preparar los decretos y controlar el gasto.</div>
+        <div class="story-tags">
+          <span class="tag">RRHH</span><span class="tag">Reportes</span><span class="tag">Decretos</span>
+        </div>
+      </div>
+
+      <div class="story-card">
+        <div class="story-id">HU-RRHH-04</div>
+        <span class="story-priority priority-baja">Baja prioridad</span>
+        <div class="story-title">Registro de licencias médicas</div>
+        <div class="story-desc">Como operador RRHH, quiero registrar licencias médicas con tipo, días, COMPIN y entidad pagadora para mantener el registro actualizado del ausentismo.</div>
+        <div class="story-tags">
+          <span class="tag">RRHH</span><span class="tag">Licencias</span><span class="tag">Fase 2</span>
+        </div>
+      </div>
+
+      <div class="story-card">
+        <div class="story-id">HU-RRHH-05</div>
+        <span class="story-priority priority-baja">Baja prioridad</span>
+        <div class="story-title">Control de vacaciones</div>
+        <div class="story-desc">Como operador RRHH, quiero ver el saldo de vacaciones de cada funcionario calculado según su antigüedad para planificar los períodos de descanso.</div>
+        <div class="story-tags">
+          <span class="tag">RRHH</span><span class="tag">Vacaciones</span><span class="tag">Fase 2</span>
+        </div>
+      </div>
+
+      <div class="story-card">
+        <div class="story-id">HU-CORE-01</div>
+        <span class="story-priority priority-baja">Baja prioridad</span>
+        <div class="story-title">Vista checklist completado</div>
+        <div class="story-desc">Como encargado o control, quiero ver las respuestas del checklist de una solicitud ya completada para auditar que el conductor verificó el estado del vehículo correctamente.</div>
+        <div class="story-tags">
+          <span class="tag">Flota</span><span class="tag">Auditoría</span><span class="tag">Checklist</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  Sistema IMO · Municipalidad de Ollagüe · Generado con Claude Code · Junio 2026
+</footer>
+
+</body>
+</html>
