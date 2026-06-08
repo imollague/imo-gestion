@@ -702,83 +702,69 @@
 <script>
 const FLUJOS = {
   flota: {
-    titulo: "🚛 Gestión de Flota — Flujo completo",
-    subtitulo: "Desde la solicitud del conductor hasta el cierre del proceso",
+    titulo: "🚛 Gestión de Flota — Flujo v2",
+    subtitulo: "Checklist + OS disponibles de inmediato. Encargado autoriza OS. Cierre automático al registrar llegada.",
     leyenda: [
       { cls: "badge-conductor", label: "Conductor" },
       { cls: "badge-encargado", label: "Encargado de Vehículos" },
-      { cls: "badge-admin", label: "Admin / Alcalde" },
+      { cls: "badge-admin", label: "Admin (respaldo)" },
       { cls: "badge-sistema", label: "Sistema (automático)" },
     ],
     pasos: [
       {
         actor: "conductor", badge: "badge-conductor", label: "Conductor",
         titulo: "Crea solicitud de vehículo",
-        desc: "Selecciona un vehículo operativo disponible, ingresa destino y propósito del viaje. El nombre del conductor se pre-llena desde su sesión.",
-        nota: "Sistema valida que el vehículo esté OPERATIVO y sin solicitud activa.",
-        status: "done"
-      },
-      {
-        actor: "encargado", badge: "badge-encargado", label: "Encargado / Admin",
-        titulo: "Revisa y aprueba (o rechaza)",
-        desc: "El encargado de vehículos —o el administrador como respaldo— revisa la solicitud y la aprueba con un click. Si rechaza, ingresa el motivo.",
-        nota: "La solicitud queda en estado APROBADA. El conductor puede continuar.",
+        desc: "Selecciona un vehículo operativo disponible, ingresa destino y propósito. El nombre del conductor se pre-llena desde su sesión.",
+        nota: "Sistema valida que el vehículo esté OPERATIVO y sin solicitud activa. El checklist y la OS quedan disponibles inmediatamente.",
         status: "done"
       },
       {
         actor: "conductor", badge: "badge-conductor", label: "Conductor",
-        titulo: "Completa el Checklist del vehículo",
-        desc: "Revisa físicamente el vehículo ítem por ítem (documentación, niveles, eléctrico, sistemas, general). Marca OK / NO OK / N/A. Los ítems NO OK requieren observación obligatoria.",
-        nota: "La imagen del vehículo se muestra como referencia. 20 ítems en 5 categorías.",
+        titulo: "Completa el Checklist + fotografías",
+        desc: "Revisa el vehículo ítem por ítem (documentación, niveles, eléctrico, sistemas, general). Marca OK / NO OK / N/A. Puede tomar o adjuntar fotos del vehículo: frontal, laterales y posterior.",
+        nota: "20 ítems en 5 categorías. Los ítems NO OK requieren observación. Las fotos son opcionales pero recomendadas.",
         status: "done"
       },
       {
         actor: "conductor", badge: "badge-conductor", label: "Conductor",
         titulo: "Genera la Orden de Servicio",
-        desc: "Ingresa hora estimada de salida y retorno. El sistema genera automáticamente la OS con todos los datos del viaje precargados.",
-        nota: "La OS puede descargarse como PDF para subir a FEDOKS si el proceso formal lo requiere.",
+        desc: "Ingresa hora estimada de salida y retorno. Puede registrar el folio FEDOKS si el proceso formal lo requiere. El PDF está disponible para descargar.",
+        nota: "La OS se puede descargar como PDF en cualquier momento para subir a FEDOKS.",
         status: "done"
       },
       {
         actor: "encargado", badge: "badge-encargado", label: "Encargado / Admin",
         titulo: "Autoriza la Orden de Servicio",
-        desc: "Firma digitalmente la OS en el sistema. Queda registrado el usuario autorizante y el timestamp exacto.",
-        nota: "Esta firma desbloquea al conductor para partir. Equivale a la firma física de papel.",
+        desc: "Revisa los detalles de la OS (conductor, vehículo, destino, hora estimada). La autoriza o rechaza con motivo. Queda registrado el autorizante y el timestamp exacto.",
+        nota: "La autorización de la OS equivale a la firma física de papel. El administrador actúa como respaldo si el encargado no está disponible.",
         status: "done"
       },
       {
         actor: "conductor", badge: "badge-conductor", label: "Conductor",
         titulo: "Registra km de salida",
         desc: "Antes de partir, ingresa el kilometraje actual del vehículo desde su celular. La solicitud pasa a EN CURSO.",
-        nota: "El sistema actualiza el kmActual del vehículo y marca el vehículo como en uso.",
+        nota: "El sistema actualiza el kmActual del vehículo en tiempo real.",
         status: "done"
       },
       {
         actor: "conductor", badge: "badge-conductor", label: "Conductor",
         titulo: "Registra paradas durante el viaje",
-        desc: "Por cada parada ingresa el km en ese momento y el motivo (opcional). Si cargó combustible, activa la casilla e ingresa litros y número de comprobante.",
-        nota: "Puede registrar múltiples paradas. Cada una queda con fecha y hora automática.",
+        desc: "Por cada parada ingresa el km en ese momento y el motivo (opcional). Si hay carga de combustible, activa la casilla e ingresa litros y número de comprobante.",
+        nota: "Puede registrar múltiples paradas. Cada una queda con fecha y hora automática. Sin paradas también es válido.",
         status: "done"
       },
       {
         actor: "conductor", badge: "badge-conductor", label: "Conductor",
-        titulo: "Registra km de llegada y observaciones",
-        desc: "Al volver, ingresa el km de llegada (debe ser mayor al de salida) y puede agregar una observación general del viaje.",
-        nota: "El sistema valida que km llegada > km salida para evitar errores de digitación.",
-        status: "done"
-      },
-      {
-        actor: "conductor", badge: "badge-conductor", label: "Conductor",
-        titulo: "Cierra el proceso",
-        desc: "Confirma el cierre del proceso. Una vez cerrado, el proceso es INMUTABLE — no puede modificarse.",
-        nota: "El sistema crea automáticamente una entrada en la Hoja de Vida del vehículo con el resumen del viaje.",
+        titulo: "Registra km llegada + observaciones → proceso se cierra",
+        desc: "Al llegar, ingresa el km de llegada y observaciones del viaje si las tiene. Al confirmar, el proceso se cierra automáticamente. No hay paso extra de cierre.",
+        nota: "Km llegada debe ser mayor al de salida. El cierre es inmutable — no puede modificarse posteriormente.",
         status: "done"
       },
       {
         actor: "sistema", badge: "badge-sistema", label: "Sistema",
-        titulo: "Registro en Hoja de Vida del vehículo",
-        desc: "Queda registrado el uso con: conductor, destino, km recorridos, litros consumidos, fecha y hora. Auditable por patente en cualquier momento.",
-        nota: "Retención mínima 5 años. Proceso cerrado = inmutable.",
+        titulo: "Cierre automático y registro en Hoja de Vida",
+        desc: "En una sola transacción: estado → CERRADA, km del vehículo actualizado, entrada automática en Hoja de Vida con resumen del viaje (conductor, destino, km recorridos, litros cargados).",
+        nota: "Retención mínima 5 años. Auditable por patente en cualquier momento.",
         status: "done"
       },
     ]

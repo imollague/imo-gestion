@@ -33,22 +33,21 @@ Gestión del parque vehicular municipal: vehículos, proceso de uso digital (sol
 
 ---
 
-## Flujo del proceso (estado digital)
+## Flujo del proceso (estado digital — v2)
 
 ```
-PENDIENTE → APROBADA → EN_CURSO → CERRADA
+PENDIENTE → APROBADA → EN_CURSO → CERRADA (auto)
               └→ RECHAZADA
 ```
 
-Dentro de APROBADA → EN_CURSO ocurren (en orden):
-1. Conductor completa **Checklist** del vehículo
-2. Conductor genera **Orden de Servicio** → espera confirmación del autorizante
-3. Autorizante confirma OS en el sistema (usuario + timestamp)
-4. Conductor registra **km de salida** al partir
-5. Conductor registra **cargas de combustible** durante el viaje (cada carga por separado: km, litros, comprobante)
-6. Conductor registra **km de llegada** al volver
-7. Conductor agrega observación en **Hoja de Vida** del vehículo
-8. Conductor **cierra** el proceso → CERRADA (inmutable)
+**Flujo completo desde creación:**
+1. Conductor crea solicitud → estado PENDIENTE
+2. Conductor completa **Checklist** (20 ítems + fotos del vehículo opcionales)
+3. Conductor genera **Orden de Servicio** (hora estimada, folio FEDOKS opcional)
+4. **Encargado/Admin** revisa y autoriza la OS → estado APROBADA
+5. Conductor registra **km de salida** → estado EN_CURSO
+6. Conductor registra **paradas** durante el viaje (km + motivo + combustible opcional)
+7. Conductor registra **km de llegada + observaciones** → estado CERRADA **automáticamente** (inmutable, crea HojaVida)
 
 Actores:
 - **Conductor** — solicita, checklist, genera OS, registra km y combustible, cierra
@@ -300,16 +299,17 @@ model MantencionVehiculo {
 - [x] Subida de archivos al vehículo (Supabase Storage — bucket `flota-docs`, server-side con service role key)
 - [x] Solicitud de uso + aprobación/rechazo
 - [x] Checklist digital (20 ítems en 5 categorías, seed en prisma/seed-checklist.ts)
-- [x] Orden de Servicio + confirmación + PDF descargable (pasos 3 y 4 del stepper)
+- [x] Orden de Servicio + confirmación + PDF descargable
 - [x] Bitácora: km salida, paradas múltiples (km + motivo + combustible opcional), km llegada
 - [x] Cierre de proceso (inmutable, auto-registra en hoja de vida)
 - [x] Links en campana de alertas (vencidos en rojo, por vencer en amarillo)
 - [x] Roles FLOTA (Conductor) + ENCARGADO (Encargado Vehículos) en src/lib/roles.ts
-- [x] ENCARGADO: aprueba/rechaza, firma OS, crea vehículos, ve todas las solicitudes
+- [x] ENCARGADO: firma OS, crea vehículos, ve todas las solicitudes
 - [x] Imagen por vehículo (upload/delete Supabase Storage, visible en checklist)
 - [x] Observaciones en todos los ítems checklist (obligatoria para NO OK)
 - [x] Navbar responsive con hamburger menu móvil
 - [x] Hardening: validaciones km, estado vehículo, alertas por rol, tipos TypeScript
+- [x] **Flujo v2 (2026-06-08):** checklist + OS disponibles desde creación (sin aprobación previa); encargado autoriza OS; km llegada auto-cierra proceso; fotos del vehículo en checklist (FRONTAL/LATERAL x2/POSTERIOR, captura cámara móvil)
 
 ### Fase 2 — Mantenciones y reportes
 - [ ] Registro de mantenciones (modelo MantencionVehiculo ya existe en schema)
