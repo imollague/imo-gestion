@@ -9,6 +9,7 @@ import jsPDF from "jspdf"
 interface ChecklistItem { id: number; categoria: string; descripcion: string; orden: number }
 interface ChecklistRespuesta { itemId: number; valor: string; observacion: string }
 interface ParadaViaje { id: number; km: number; descripcion: string | null; litros: number | null; comprobanteRef: string | null; fecha: string }
+interface FotoRevision { id: number; tipo: string; url: string }
 
 interface Solicitud {
   id: number
@@ -27,23 +28,21 @@ interface Solicitud {
   ordenServicio: { id: number; horaSalidaEst: string; horaRetornoEst: string | null; folioFedoks: string | null; firmada: boolean; firmadaPor: { name: string } | null; fechaFirma: string | null } | null
   bitacora: { id: number; kmSalida: number; kmLlegada: number | null; horaRetornoReal: string | null; observacion: string | null; paradas: ParadaViaje[] } | null
   hojaVida: { id: number; tipo: string; descripcion: string; fecha: string; usuario: { name: string } }[]
+  fotosRevision: FotoRevision[]
 }
 
-// Calcula el paso lógico actual (1-8)
+// Nuevo flujo: checklist + OS disponibles desde PENDIENTE, encargado autoriza OS
 function getPaso(s: Solicitud): number {
-  if (s.estado === "PENDIENTE") return 1
   if (s.estado === "RECHAZADA") return 0
-  if (s.estado === "APROBADA") {
-    if (!s.checklist) return 2
-    if (!s.ordenServicio) return 3
-    if (!s.ordenServicio.firmada) return 4
-    return 5
+  if (s.estado === "PENDIENTE") {
+    if (!s.checklist) return 1          // conductor: completar checklist
+    if (!s.ordenServicio) return 2      // conductor: generar OS
+    if (!s.ordenServicio.firmada) return 3  // encargado: autorizar OS
+    return 3
   }
-  if (s.estado === "EN_CURSO") {
-    if (!s.bitacora?.kmLlegada) return 6
-    return 7
-  }
-  if (s.estado === "CERRADA") return 8
+  if (s.estado === "APROBADA") return 4   // conductor: registrar km salida
+  if (s.estado === "EN_CURSO") return 5   // conductor: paradas + llegada
+  if (s.estado === "CERRADA") return 6
   return 0
 }
 
@@ -113,9 +112,92 @@ function generarPDFOrden(s: Solicitud) {
 
 // ─── Componentes de cada paso ────────────────────────
 
-function PasoChecklist({ solicitudId, vehiculo, onDone }: {
+const FOTO_TIPOS = [
+  { value: "FRONTAL", label: "Frontal", icon: "⬆️" },
+  { value: "LATERAL_IZQ", label: "Lateral Izq.", icon: "⬅️" },
+  { value: "LATERAL_DER", label: "Lateral Der.", icon: "➡️" },
+  { value: "POSTERIOR", label: "Posterior", icon: "⬇️" },
+]
+
+function FotosChecklist({ solicitudId, fotosIniciales }: {
+  solicitudId: number
+  fotosIniciales: FotoRevision[]
+}) {
+  const [fotos, setFotos] = useState<FotoRevision[]>(fotosIniciales)
+  const [subiendo, setSubiendo] = useState<string | null>(null)
+
+  const subirFoto = async (tipo: string, file: File) => {
+    setSubiendo(tipo)
+    const fd = new FormData()
+    fd.append("archivo", file)
+    fd.append("tipo", tipo)
+    const res = await fetch(`/api/flota/solicitudes/${solicitudId}/checklist/fotos`, { method: "POST", body: fd })
+    setSubiendo(null)
+    if (res.ok) {
+      const nueva = await res.json()
+      setFotos((prev) => [...prev.filter((f) => f.tipo !== tipo), nueva])
+    }
+  }
+
+  const eliminarFoto = async (fotoId: number, tipo: string) => {
+    const res = await fetch(`/api/flota/solicitudes/${solicitudId}/checklist/fotos`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fotoId }),
+    })
+    if (res.ok) setFotos((prev) => prev.filter((f) => f.id !== fotoId))
+  }
+
+  return (
+    <div>
+      <p className="text-sm font-medium text-gray-700 mb-3">📷 Fotografías del vehículo <span className="text-gray-400 font-normal">(opcional)</span></p>
+      <div className="grid grid-cols-2 gap-3">
+        {FOTO_TIPOS.map(({ value, label, icon }) => {
+          const foto = fotos.find((f) => f.tipo === value)
+          return (
+            <div key={value} className="relative rounded-xl overflow-hidden border-2 border-dashed border-gray-200 bg-gray-50">
+              {foto ? (
+                <div>
+                  <img src={foto.url} alt={label} className="w-full h-24 object-cover" />
+                  <div className="flex items-center justify-between px-2 py-1 bg-white">
+                    <span className="text-xs text-green-700 font-medium">{icon} {label} ✓</span>
+                    <button onClick={() => eliminarFoto(foto.id, value)}
+                      className="text-xs text-red-400 hover:text-red-600">✕</button>
+                  </div>
+                </div>
+              ) : (
+                <label className={`flex flex-col items-center justify-center h-28 cursor-pointer ${subiendo === value ? "opacity-50" : "hover:bg-gray-100"} transition-colors`}>
+                  {subiendo === value ? (
+                    <span className="text-xs text-gray-400">Subiendo...</span>
+                  ) : (
+                    <>
+                      <span className="text-xl mb-1">{icon}</span>
+                      <span className="text-xs font-medium text-gray-600">{label}</span>
+                      <span className="text-xs text-gray-400 mt-0.5">Tomar / adjuntar</span>
+                    </>
+                  )}
+                  <input type="file" accept="image/*" capture="environment" className="hidden"
+                    disabled={!!subiendo}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) subirFoto(value, file)
+                      e.target.value = ""
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function PasoChecklist({ solicitudId, vehiculo, fotosIniciales, onDone }: {
   solicitudId: number
   vehiculo: Solicitud["vehiculo"]
+  fotosIniciales: FotoRevision[]
   onDone: () => void
 }) {
   const [items, setItems] = useState<ChecklistItem[]>([])
@@ -205,6 +287,9 @@ function PasoChecklist({ solicitudId, vehiculo, onDone }: {
           </div>
         </div>
       ))}
+      <div className="border-t pt-4">
+        <FotosChecklist solicitudId={solicitudId} fotosIniciales={fotosIniciales} />
+      </div>
       {error && <p className="text-red-600 text-sm">{error}</p>}
       <button
         onClick={handleSubmit}
@@ -321,6 +406,7 @@ function PasoBitacora({ solicitudId, bitacora, onDone }: {
       setError(`El km de llegada debe ser mayor al de salida (${bitacora.kmSalida.toLocaleString()} km)`)
       return
     }
+    if (!confirm("¿Registrar llegada y cerrar el proceso? Esta acción es irreversible.")) return
     setLoading(true)
     const res = await fetch(`/api/flota/solicitudes/${solicitudId}/bitacora`, {
       method: "PATCH",
@@ -480,7 +566,7 @@ function PasoBitacora({ solicitudId, bitacora, onDone }: {
         {error && <p className="text-red-600 text-sm mb-2">{error}</p>}
         <button onClick={registrarLlegada} disabled={loading}
           className="w-full bg-blue-600 text-white py-3.5 rounded-xl text-base font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors">
-          {loading ? "Registrando..." : "Registrar Llegada"}
+          {loading ? "Cerrando proceso..." : "🔒 Registrar llegada y cerrar proceso"}
         </button>
       </div>
     </div>
@@ -605,19 +691,20 @@ export default function SolicitudDetallePage() {
 
   const paso = getPaso(solicitud)
 
-  // Stepper visual (pasos 1-8 → 5 bloques visuales)
+  // Stepper visual — 5 bloques
   const VISUAL = [
-    { label: "Solicitud", pasos: [1] },
-    { label: "Aprobación", pasos: [1] },
-    { label: "Pre-salida", pasos: [2, 3, 4, 5] },
-    { label: "En viaje", pasos: [6] },
-    { label: "Cierre", pasos: [7, 8] },
+    { label: "Checklist" },
+    { label: "Orden de Servicio" },
+    { label: "Pre-salida" },
+    { label: "En viaje" },
+    { label: "Cierre" },
   ]
 
   const pasoVisual = solicitud.estado === "RECHAZADA" ? -1
     : paso === 1 ? 0
-    : paso <= 5 ? 2
-    : paso === 6 ? 3
+    : paso <= 3 ? 1
+    : paso === 4 ? 2
+    : paso === 5 ? 3
     : 4
 
   return (
@@ -709,34 +796,56 @@ export default function SolicitudDetallePage() {
               <div className="text-center py-6">
                 <p className="text-4xl mb-3">❌</p>
                 <p className="text-xl font-semibold text-red-600 mb-2">Solicitud rechazada</p>
-                {solicitud.motivoRechazo && (
-                  <p className="text-gray-500">Motivo: {solicitud.motivoRechazo}</p>
-                )}
+                {solicitud.motivoRechazo && <p className="text-gray-500">Motivo: {solicitud.motivoRechazo}</p>}
                 <a href="/flota/solicitudes/nueva" className="mt-4 inline-block bg-blue-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700">
                   Crear nueva solicitud
                 </a>
               </div>
             )}
 
-            {/* PASO 1: Esperando aprobación */}
+            {/* PASO 1: Checklist (conductor, inmediatamente tras crear) */}
             {paso === 1 && (
+              <PasoChecklist
+                solicitudId={solicitud.id}
+                vehiculo={solicitud.vehiculo}
+                fotosIniciales={solicitud.fotosRevision}
+                onDone={cargar}
+              />
+            )}
+
+            {/* PASO 2: Generar OS (conductor) */}
+            {paso === 2 && <PasoOrden solicitudId={solicitud.id} onDone={cargar} />}
+
+            {/* PASO 3: Encargado/Admin autoriza OS */}
+            {paso === 3 && (
               <div>
                 {(role === "ADMIN" || role === "ENCARGADO") ? (
                   <div className="space-y-4">
-                    <p className="font-semibold text-gray-800 text-lg">Solicitud pendiente de aprobación</p>
-                    <p className="text-gray-500">
-                      <strong>{solicitud.conductorNombre}</strong> solicita usar{" "}
-                      <strong>{solicitud.vehiculo.patente}</strong> para ir a <strong>{solicitud.destino}</strong>.
-                    </p>
-                    <div className="flex gap-3 pt-2">
-                      <button onClick={aprobar} disabled={loadingAction}
-                        className="flex-1 bg-green-600 text-white py-3 rounded-xl text-base font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors">
-                        ✓ Aprobar
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <p className="font-semibold text-gray-800 text-lg">Orden de Servicio para autorizar</p>
+                      <button onClick={() => generarPDFOrden(solicitud)}
+                        className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-50 transition-colors">
+                        📄 Descargar PDF
                       </button>
                     </div>
-                    <div className="border-t pt-4">
+                    <div className="bg-gray-50 rounded-lg p-4 text-sm space-y-2">
+                      <div className="flex justify-between"><span className="text-gray-500">Conductor</span><span>{solicitud.conductorNombre}</span></div>
+                      <div className="flex justify-between"><span className="text-gray-500">Vehículo</span><span className="font-mono font-bold">{solicitud.vehiculo.patente}</span></div>
+                      <div className="flex justify-between"><span className="text-gray-500">Destino</span><span>{solicitud.destino}</span></div>
+                      <div className="flex justify-between"><span className="text-gray-500">Salida estimada</span>
+                        <span>{solicitud.ordenServicio?.horaSalidaEst ? fmt(solicitud.ordenServicio.horaSalidaEst) : "—"}</span>
+                      </div>
+                      {solicitud.ordenServicio?.folioFedoks && (
+                        <div className="flex justify-between"><span className="text-gray-500">Folio FEDOKS</span><span className="font-mono">{solicitud.ordenServicio.folioFedoks}</span></div>
+                      )}
+                    </div>
+                    <button onClick={firmarOrden} disabled={loadingAction}
+                      className="w-full bg-blue-600 text-white py-3.5 rounded-xl text-base font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                      {loadingAction ? "Procesando..." : "✅ Autorizar Orden de Servicio"}
+                    </button>
+                    <div className="border-t pt-3">
                       <input value={motivoRechazo} onChange={(e) => setMotivoRechazo(e.target.value)}
-                        placeholder="Motivo de rechazo..."
+                        placeholder="Motivo de rechazo (si corresponde)..."
                         className="w-full border rounded-lg px-3 py-2 text-sm mb-2 focus:outline-none focus:ring-2 focus:ring-red-300" />
                       <button onClick={rechazar} disabled={loadingAction || !motivoRechazo.trim()}
                         className="w-full bg-red-500 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-red-600 disabled:opacity-50 transition-colors">
@@ -745,73 +854,12 @@ export default function SolicitudDetallePage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center py-8">
-                    <p className="text-4xl mb-3">⏳</p>
-                    <p className="text-xl font-semibold text-gray-700">Esperando aprobación</p>
-                    <p className="text-gray-400 mt-2">Un administrador revisará tu solicitud pronto.</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* PASO 2: Checklist */}
-            {paso === 2 && <PasoChecklist solicitudId={solicitud.id} vehiculo={solicitud.vehiculo} onDone={cargar} />}
-
-            {/* PASO 3: Orden de servicio */}
-            {paso === 3 && <PasoOrden solicitudId={solicitud.id} onDone={cargar} />}
-
-            {/* PASO 4: Esperando firma */}
-            {paso === 4 && (
-              <div>
-                {(role === "ADMIN" || role === "ENCARGADO") ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <p className="font-semibold text-gray-800 text-lg">Orden de Servicio lista para firmar</p>
-                      <button
-                        onClick={() => generarPDFOrden(solicitud)}
-                        className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-50 transition-colors"
-                      >
-                        📄 Descargar PDF
-                      </button>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-4 text-sm space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Conductor</span>
-                        <span>{solicitud.conductorNombre}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Vehículo</span>
-                        <span>{solicitud.vehiculo.patente} — {solicitud.vehiculo.marca} {solicitud.vehiculo.modelo}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Destino</span>
-                        <span>{solicitud.destino}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Salida estimada</span>
-                        <span>{solicitud.ordenServicio?.horaSalidaEst ? fmt(solicitud.ordenServicio.horaSalidaEst) : "—"}</span>
-                      </div>
-                      {solicitud.ordenServicio?.folioFedoks && (
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Folio FEDOKS</span>
-                          <span className="font-mono">{solicitud.ordenServicio.folioFedoks}</span>
-                        </div>
-                      )}
-                    </div>
-                    <button onClick={firmarOrden} disabled={loadingAction}
-                      className="w-full bg-blue-600 text-white py-3.5 rounded-xl text-base font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                      {loadingAction ? "Procesando..." : "✍ Autorizar Orden de Servicio"}
-                    </button>
-                  </div>
-                ) : (
                   <div className="text-center py-6">
                     <p className="text-4xl mb-3">✍️</p>
                     <p className="text-xl font-semibold text-gray-700">Esperando autorización</p>
-                    <p className="text-gray-400 mt-2 mb-5">Un administrador debe firmar la orden de servicio.</p>
-                    <button
-                      onClick={() => generarPDFOrden(solicitud)}
-                      className="inline-flex items-center gap-2 bg-gray-100 text-gray-700 px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors"
-                    >
+                    <p className="text-gray-400 mt-2 mb-5">El encargado de vehículos debe autorizar la orden de servicio.</p>
+                    <button onClick={() => generarPDFOrden(solicitud)}
+                      className="inline-flex items-center gap-2 bg-gray-100 text-gray-700 px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">
                       📄 Descargar PDF para FEDOKS
                     </button>
                   </div>
@@ -819,21 +867,16 @@ export default function SolicitudDetallePage() {
               </div>
             )}
 
-            {/* PASO 5: Registrar km salida */}
-            {paso === 5 && <PasoBitacora solicitudId={solicitud.id} bitacora={null} onDone={cargar} />}
+            {/* PASO 4: Registrar km salida (OS autorizada) */}
+            {paso === 4 && <PasoBitacora solicitudId={solicitud.id} bitacora={null} onDone={cargar} />}
 
-            {/* PASO 6: En viaje */}
-            {paso === 6 && solicitud.bitacora && (
+            {/* PASO 5: En viaje — paradas + km llegada + cierre automático */}
+            {paso === 5 && solicitud.bitacora && (
               <PasoBitacora solicitudId={solicitud.id} bitacora={solicitud.bitacora} onDone={cargar} />
             )}
 
-            {/* PASO 7: Cierre */}
-            {paso === 7 && solicitud.bitacora?.kmLlegada && (
-              <PasoCierre solicitudId={solicitud.id} bitacora={solicitud.bitacora} onDone={cargar} />
-            )}
-
-            {/* PASO 8: Cerrada */}
-            {paso === 8 && (
+            {/* PASO 6: Cerrada */}
+            {paso === 6 && (
               <div className="text-center py-8">
                 <p className="text-4xl mb-3">🔒</p>
                 <p className="text-xl font-semibold text-gray-700">Proceso cerrado</p>

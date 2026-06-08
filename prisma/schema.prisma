@@ -313,10 +313,20 @@ model SolicitudVehiculo {
   cerradoPorId    Int?
   cerradoPor      User?           @relation("CierreFlota", fields: [cerradoPorId], references: [id])
 
-  checklist     ChecklistSolicitud?
-  ordenServicio OrdenServicioFlota?
-  bitacora      BitacoraViaje?
-  hojaVida      HojaVidaVehiculo[]
+  checklist       ChecklistSolicitud?
+  ordenServicio   OrdenServicioFlota?
+  bitacora        BitacoraViaje?
+  hojaVida        HojaVidaVehiculo[]
+  fotosRevision   FotoRevisionVehiculo[]
+}
+
+model FotoRevisionVehiculo {
+  id          Int               @id @default(autoincrement())
+  solicitudId Int
+  solicitud   SolicitudVehiculo @relation(fields: [solicitudId], references: [id])
+  tipo        String            // FRONTAL | LATERAL_IZQ | LATERAL_DER | POSTERIOR
+  url         String
+  fecha       DateTime          @default(now())
 }
 
 model ChecklistSolicitud {
