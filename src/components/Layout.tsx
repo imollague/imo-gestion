@@ -42,6 +42,8 @@ export default function Layout({ children, titulo }: LayoutProps) {
     { href: "/dashboard/stats", label: "Estadisticas", roles: null },
     { href: "/flota", label: "Flota", roles: ["ADMIN", "FLOTA", "ENCARGADO"] },
     { href: "/flota/solicitudes", label: "Solicitudes", roles: ["FLOTA", "ENCARGADO"] },
+    { href: "/flota/conductores", label: "Conductores", roles: ["ADMIN", "ENCARGADO"] },
+    { href: "/flota/documentos-config", label: "Documentos", roles: ["ADMIN", "ENCARGADO"] },
     { href: "/admin/usuarios", label: "Usuarios", roles: ["ADMIN"] },
     { href: "/admin/actividad", label: "Actividad", roles: ["ADMIN"] },
   ]

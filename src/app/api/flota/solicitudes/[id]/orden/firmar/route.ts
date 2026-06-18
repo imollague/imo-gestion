@@ -9,12 +9,9 @@ export async function POST(_: NextRequest, { params }: { params: Promise<{ id: s
   const { id } = await params
   const solicitud = await prisma.solicitudVehiculo.findUnique({
     where: { id: parseInt(id) },
-    include: { ordenServicio: true, checklist: true },
+    include: { ordenServicio: true },
   })
   if (!solicitud) return NextResponse.json({ error: "No encontrado" }, { status: 404 })
-  if (!solicitud.checklist) {
-    return NextResponse.json({ error: "El checklist debe completarse antes de autorizar" }, { status: 400 })
-  }
   if (!solicitud.ordenServicio) {
     return NextResponse.json({ error: "No existe orden de servicio" }, { status: 400 })
   }

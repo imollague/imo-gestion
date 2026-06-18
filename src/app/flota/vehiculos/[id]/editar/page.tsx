@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { useSession } from "next-auth/react"
 import Layout from "@/components/Layout"
+import { TIPOS_LICENCIA } from "@/lib/licencias"
 
 const TIPOS = [
   { value: "CAMIONETA", label: "Camioneta" },
@@ -22,6 +23,8 @@ const ESTADOS = [
   { value: "DADO_DE_BAJA", label: "Dado de baja" },
 ]
 
+interface TipoDocumento { id: number; nombre: string; diasAlertaDefault: number }
+
 function toDateInput(iso: string | null) {
   if (!iso) return ""
   return iso.split("T")[0]
@@ -33,9 +36,12 @@ export default function EditarVehiculoPage() {
   const { id } = useParams<{ id: string }>()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [tiposDocumento, setTiposDocumento] = useState<TipoDocumento[]>([])
+  const [vencimientos, setVencimientos] = useState<Record<number, string>>({})
+  const [licencias, setLicencias] = useState<string[]>([])
   const [form, setForm] = useState({
     patente: "", marca: "", modelo: "", anio: "", tipo: "", estado: "", kmActual: "",
-    vencimientoSOAP: "", vencimientoRevTecnica: "", vencimientoPermiso: "", observaciones: "",
+    observaciones: "",
   })
 
   useEffect(() => {
@@ -43,39 +49,51 @@ export default function EditarVehiculoPage() {
   }, [status, router])
 
   useEffect(() => {
+    fetch("/api/flota/tipos-documento").then((r) => r.json()).then(setTiposDocumento)
+  }, [])
+
+  useEffect(() => {
     if (session) {
       fetch(`/api/flota/vehiculos/${id}`)
         .then((r) => r.json())
-        .then((v) => setForm({
-          patente: v.patente ?? "",
-          marca: v.marca ?? "",
-          modelo: v.modelo ?? "",
-          anio: String(v.anio ?? ""),
-          tipo: v.tipo ?? "",
-          estado: v.estado ?? "",
-          kmActual: String(v.kmActual ?? 0),
-          vencimientoSOAP: toDateInput(v.vencimientoSOAP),
-          vencimientoRevTecnica: toDateInput(v.vencimientoRevTecnica),
-          vencimientoPermiso: toDateInput(v.vencimientoPermiso),
-          observaciones: v.observaciones ?? "",
-        }))
+        .then((v) => {
+          setForm({
+            patente: v.patente ?? "",
+            marca: v.marca ?? "",
+            modelo: v.modelo ?? "",
+            anio: String(v.anio ?? ""),
+            tipo: v.tipo ?? "",
+            estado: v.estado ?? "",
+            kmActual: String(v.kmActual ?? 0),
+            observaciones: v.observaciones ?? "",
+          })
+          setLicencias(v.licenciasPermitidas ?? [])
+          const vencMap: Record<number, string> = {}
+          for (const ve of v.vencimientos ?? []) vencMap[ve.tipoDocumentoId] = toDateInput(ve.fechaVencimiento)
+          setVencimientos(vencMap)
+        })
     }
   }, [session, id])
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }))
+  const toggleLicencia = (v: string) =>
+    setLicencias((l) => (l.includes(v) ? l.filter((x) => x !== v) : [...l, v]))
 
   const handleSubmit = async () => {
     setError("")
     setLoading(true)
+    const vencimientosAEnviar = tiposDocumento.map((td) => ({
+      tipoDocumentoId: td.id,
+      fechaVencimiento: vencimientos[td.id] || null,
+    }))
     const res = await fetch(`/api/flota/vehiculos/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...form,
-        vencimientoSOAP: form.vencimientoSOAP || null,
-        vencimientoRevTecnica: form.vencimientoRevTecnica || null,
-        vencimientoPermiso: form.vencimientoPermiso || null,
         observaciones: form.observaciones || null,
+        licenciasPermitidas: licencias,
+        vencimientos: vencimientosAEnviar,
       }),
     })
     setLoading(false)
@@ -148,21 +166,35 @@ export default function EditarVehiculoPage() {
           <div className="border-t pt-4">
             <p className="text-sm font-medium text-gray-700 mb-3">Vencimientos documentales</p>
             <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">SOAP</label>
-                <input type="date" value={form.vencimientoSOAP} onChange={(e) => set("vencimientoSOAP", e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Revisión técnica</label>
-                <input type="date" value={form.vencimientoRevTecnica} onChange={(e) => set("vencimientoRevTecnica", e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Permiso circulación</label>
-                <input type="date" value={form.vencimientoPermiso} onChange={(e) => set("vencimientoPermiso", e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
-              </div>
+              {tiposDocumento.map((td) => (
+                <div key={td.id}>
+                  <label className="block text-xs text-gray-500 mb-1">{td.nombre}</label>
+                  <input type="date" value={vencimientos[td.id] ?? ""}
+                    onChange={(e) => setVencimientos((v) => ({ ...v, [td.id]: e.target.value }))}
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t pt-4">
+            <p className="text-sm font-medium text-gray-700 mb-1">Licencias permitidas</p>
+            <p className="text-xs text-gray-400 mb-3">Sin selección = cualquier conductor puede solicitarlo</p>
+            <div className="flex flex-wrap gap-2">
+              {TIPOS_LICENCIA.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => toggleLicencia(t.value)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border-2 transition-colors ${
+                    licencias.includes(t.value)
+                      ? "bg-blue-600 border-blue-600 text-white"
+                      : "bg-white border-gray-200 text-gray-500 hover:border-gray-400"
+                  }`}
+                >
+                  {t.value}
+                </button>
+              ))}
             </div>
           </div>
 

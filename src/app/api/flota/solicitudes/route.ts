@@ -35,9 +35,12 @@ export async function POST(req: NextRequest) {
 
   const userId = parseInt(auth.session.user.id)
   const body = await req.json()
-  const { vehiculoId, conductorNombre, destino, proposito } = body
+  const {
+    vehiculoId, conductorFlotaId, conductorNombre, destino, proposito,
+    horaSalidaEst, horaRetornoEst, folioFedoks,
+  } = body
 
-  if (!vehiculoId || !conductorNombre || !destino || !proposito) {
+  if (!vehiculoId || !conductorNombre || !destino || !proposito || !horaSalidaEst) {
     return NextResponse.json({ error: "Faltan campos obligatorios" }, { status: 400 })
   }
 
@@ -61,9 +64,17 @@ export async function POST(req: NextRequest) {
     data: {
       vehiculoId: parseInt(vehiculoId),
       creadoPorId: userId,
+      conductorFlotaId: conductorFlotaId ? parseInt(conductorFlotaId) : null,
       conductorNombre: conductorNombre.trim(),
       destino: destino.trim(),
       proposito: proposito.trim(),
+      ordenServicio: {
+        create: {
+          horaSalidaEst: new Date(horaSalidaEst),
+          horaRetornoEst: horaRetornoEst ? new Date(horaRetornoEst) : null,
+          folioFedoks: folioFedoks?.trim() || null,
+        },
+      },
     },
   })
 

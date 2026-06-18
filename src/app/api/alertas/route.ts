@@ -29,9 +29,8 @@ export async function GET() {
     prisma.vehiculo.findMany({
       where: { activo: true },
       select: {
-        vencimientoSOAP: true,
-        vencimientoRevTecnica: true,
-        vencimientoPermiso: true,
+        id: true,
+        vencimientos: { select: { fechaVencimiento: true, diasAlerta: true, tipoDocumento: { select: { diasAlertaDefault: true } } } },
       },
     }),
   ])
@@ -39,13 +38,16 @@ export async function GET() {
   const productosStockBajo = productos.filter((p) => p.stockActual <= p.stockMinimo && p.stockMinimo > 0).length
   const medicamentosStockBajo = medicamentos.filter((m) => m.stockActual <= m.stockMinimo && m.stockMinimo > 0).length
 
-  // Vehículos con al menos un documento vencido o por vencer en 30 días
+  // Vehículos con al menos un documento vencido o dentro de su umbral de alerta configurado
   let vehiculosDocVencidos = 0
   let vehiculosDocPorVencer = 0
   for (const v of vehiculos) {
-    const fechas = [v.vencimientoSOAP, v.vencimientoRevTecnica, v.vencimientoPermiso].filter(Boolean) as Date[]
-    const vencido = fechas.some((f) => f < ahora)
-    const porVencer = !vencido && fechas.some((f) => f <= en30dias)
+    const vencido = v.vencimientos.some((ve) => ve.fechaVencimiento < ahora)
+    const porVencer = !vencido && v.vencimientos.some((ve) => {
+      const umbralDias = ve.diasAlerta ?? ve.tipoDocumento.diasAlertaDefault
+      const limite = new Date(ahora.getTime() + umbralDias * 86400000)
+      return ve.fechaVencimiento <= limite
+    })
     if (vencido) vehiculosDocVencidos++
     else if (porVencer) vehiculosDocPorVencer++
   }

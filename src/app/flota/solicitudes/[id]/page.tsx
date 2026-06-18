@@ -22,7 +22,7 @@ interface Solicitud {
   fechaSolicitud: string
   fechaCierre: string | null
   motivoRechazo: string | null
-  vehiculo: { id: number; patente: string; marca: string; modelo: string; tipo: string; imagenUrl: string | null }
+  vehiculo: { id: number; patente: string; marca: string; modelo: string; tipo: string; imagenUrl: string | null; kmActual: number }
   creadoPor: { id: number; name: string }
   aprobadoPor: { name: string } | null
   cerradoPor: { name: string } | null
@@ -33,18 +33,16 @@ interface Solicitud {
   fotosRevision: FotoRevision[]
 }
 
-// Nuevo flujo: checklist + OS disponibles desde PENDIENTE, encargado autoriza OS
+// Flujo v3: solicitud + OS se crean juntas → encargado autoriza → checklist+fotos → salida → viaje → cierre
 function getPaso(s: Solicitud): number {
   if (s.estado === "RECHAZADA") return 0
-  if (s.estado === "PENDIENTE") {
-    if (!s.checklist) return 1          // conductor: completar checklist
-    if (!s.ordenServicio) return 2      // conductor: generar OS
-    if (!s.ordenServicio.firmada) return 3  // encargado: autorizar OS
-    return 3
+  if (s.estado === "PENDIENTE") return 1   // encargado: autorizar OS
+  if (s.estado === "APROBADA") {
+    if (!s.checklist) return 2             // conductor: checklist + fotos
+    return 3                               // conductor: registrar km salida
   }
-  if (s.estado === "APROBADA") return 4   // conductor: registrar km salida
-  if (s.estado === "EN_CURSO") return 5   // conductor: paradas + llegada
-  if (s.estado === "CERRADA") return 6
+  if (s.estado === "EN_CURSO") return 4    // conductor: paradas + llegada
+  if (s.estado === "CERRADA") return 5
   return 0
 }
 
@@ -302,7 +300,7 @@ function PasoChecklist({ solicitudId, vehiculo, fotosIniciales, onDone }: {
       .then((d) => {
         setItems(d)
         const init: Record<number, ChecklistRespuesta> = {}
-        d.forEach((i: ChecklistItem) => { init[i.id] = { itemId: i.id, valor: "", observacion: "" } })
+        d.forEach((i: ChecklistItem) => { init[i.id] = { itemId: i.id, valor: "OK", observacion: "" } })
         setRespuestas(init)
       })
   }, [])
@@ -340,7 +338,7 @@ function PasoChecklist({ solicitudId, vehiculo, fotosIniciales, onDone }: {
           className="w-full max-h-48 object-cover rounded-xl"
         />
       )}
-      <p className="text-gray-600">Revisa el vehículo y completa el checklist antes de salir.</p>
+      <p className="text-gray-600">Revisa el vehículo. Todos los ítems parten en OK — solo cambia los que detectes con problemas.</p>
       {categorias.map((cat) => (
         <div key={cat}>
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">{cat}</p>
@@ -393,62 +391,13 @@ function PasoChecklist({ solicitudId, vehiculo, fotosIniciales, onDone }: {
   )
 }
 
-function PasoOrden({ solicitudId, onDone }: { solicitudId: number; onDone: () => void }) {
-  const [form, setForm] = useState({ horaSalidaEst: "", horaRetornoEst: "", folioFedoks: "" })
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
-
-  const handleSubmit = async () => {
-    if (!form.horaSalidaEst) { setError("La hora de salida es obligatoria"); return }
-    setLoading(true)
-    const res = await fetch(`/api/flota/solicitudes/${solicitudId}/orden`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    })
-    setLoading(false)
-    if (!res.ok) { const d = await res.json(); setError(d.error); return }
-    onDone()
-  }
-
-  return (
-    <div className="space-y-5">
-      <p className="text-gray-600">Completa los datos de la orden de servicio.</p>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Hora de salida estimada *</label>
-        <input type="datetime-local" value={form.horaSalidaEst}
-          onChange={(e) => setForm((f) => ({ ...f, horaSalidaEst: e.target.value }))}
-          className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Hora de retorno estimada</label>
-        <input type="datetime-local" value={form.horaRetornoEst}
-          onChange={(e) => setForm((f) => ({ ...f, horaRetornoEst: e.target.value }))}
-          className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Folio FEDOKS (opcional)</label>
-        <input value={form.folioFedoks}
-          onChange={(e) => setForm((f) => ({ ...f, folioFedoks: e.target.value }))}
-          placeholder="Ej: EXP-2026-001"
-          className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
-        <p className="text-xs text-gray-400 mt-1">Si subes la OS a FEDOKS, ingresa el folio aquí para trazabilidad.</p>
-      </div>
-      {error && <p className="text-red-600 text-sm">{error}</p>}
-      <button onClick={handleSubmit} disabled={loading}
-        className="w-full bg-blue-600 text-white py-3.5 rounded-xl text-base font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors">
-        {loading ? "Guardando..." : "Generar Orden de Servicio"}
-      </button>
-    </div>
-  )
-}
-
-function PasoBitacora({ solicitudId, bitacora, onDone }: {
+function PasoBitacora({ solicitudId, bitacora, kmActualVehiculo, onDone }: {
   solicitudId: number
   bitacora: Solicitud["bitacora"]
+  kmActualVehiculo: number
   onDone: () => void
 }) {
-  const [kmSalida, setKmSalida] = useState("")
+  const [kmSalida, setKmSalida] = useState(String(kmActualVehiculo))
   const [kmLlegada, setKmLlegada] = useState("")
   const [horaRetorno, setHoraRetorno] = useState("")
   const [observacion, setObservacion] = useState("")
@@ -521,9 +470,9 @@ function PasoBitacora({ solicitudId, bitacora, onDone }: {
           <input
             type="number" inputMode="numeric" value={kmSalida}
             onChange={(e) => setKmSalida(e.target.value)}
-            placeholder="Ej: 45230"
             className="w-full border rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
           />
+          <p className="text-xs text-gray-400 mt-1">Sugerido a partir del último kilometraje registrado — corrígelo si es necesario.</p>
         </div>
         {error && <p className="text-red-600 text-sm">{error}</p>}
         <button onClick={registrarSalida} disabled={loading}
@@ -731,21 +680,16 @@ export default function SolicitudDetallePage() {
 
   const paso = getPaso(solicitud)
 
-  // Stepper visual — 5 bloques
+  // Stepper visual — 5 bloques, alineado 1:1 con getPaso()
   const VISUAL = [
-    { label: "Checklist" },
     { label: "Orden de Servicio" },
-    { label: "Pre-salida" },
+    { label: "Checklist" },
+    { label: "Salida" },
     { label: "En viaje" },
     { label: "Cierre" },
   ]
 
-  const pasoVisual = solicitud.estado === "RECHAZADA" ? -1
-    : paso === 1 ? 0
-    : paso <= 3 ? 1
-    : paso === 4 ? 2
-    : paso === 5 ? 3
-    : 4
+  const pasoVisual = solicitud.estado === "RECHAZADA" ? -1 : paso - 1
 
   return (
     <Layout titulo={`Solicitud #${solicitud.id} — ${solicitud.vehiculo.patente}`}>
@@ -843,39 +787,8 @@ export default function SolicitudDetallePage() {
               </div>
             )}
 
-            {/* PASO 1: Checklist (conductor, inmediatamente tras crear) */}
+            {/* PASO 1: Encargado/Admin autoriza la OS creada junto con la solicitud */}
             {paso === 1 && (
-              role === "ENCARGADO" ? (
-                <div className="text-center py-10">
-                  <p className="text-4xl mb-3">⏳</p>
-                  <p className="text-xl font-semibold text-gray-700">Esperando al conductor</p>
-                  <p className="text-gray-400 mt-2">El conductor debe completar el checklist antes de continuar.</p>
-                </div>
-              ) : (
-                <PasoChecklist
-                  solicitudId={solicitud.id}
-                  vehiculo={solicitud.vehiculo}
-                  fotosIniciales={solicitud.fotosRevision}
-                  onDone={cargar}
-                />
-              )
-            )}
-
-            {/* PASO 2: Generar OS (conductor) */}
-            {paso === 2 && (
-              role === "ENCARGADO" ? (
-                <div className="text-center py-10">
-                  <p className="text-4xl mb-3">⏳</p>
-                  <p className="text-xl font-semibold text-gray-700">Esperando al conductor</p>
-                  <p className="text-gray-400 mt-2">El conductor debe generar la Orden de Servicio antes de continuar.</p>
-                </div>
-              ) : (
-                <PasoOrden solicitudId={solicitud.id} onDone={cargar} />
-              )
-            )}
-
-            {/* PASO 3: Encargado/Admin autoriza OS */}
-            {paso === 3 && (
               <div>
                 {(role === "ADMIN" || role === "ENCARGADO") ? (
                   <div className="space-y-4">
@@ -925,16 +838,36 @@ export default function SolicitudDetallePage() {
               </div>
             )}
 
-            {/* PASO 4: Registrar km salida (OS autorizada) */}
-            {paso === 4 && <PasoBitacora solicitudId={solicitud.id} bitacora={null} onDone={cargar} />}
-
-            {/* PASO 5: En viaje — paradas + km llegada + cierre automático */}
-            {paso === 5 && solicitud.bitacora && (
-              <PasoBitacora solicitudId={solicitud.id} bitacora={solicitud.bitacora} onDone={cargar} />
+            {/* PASO 2: Checklist + fotos (conductor, tras autorizar la OS) */}
+            {paso === 2 && (
+              role === "ENCARGADO" ? (
+                <div className="text-center py-10">
+                  <p className="text-4xl mb-3">⏳</p>
+                  <p className="text-xl font-semibold text-gray-700">Esperando al conductor</p>
+                  <p className="text-gray-400 mt-2">El conductor debe completar el checklist antes de continuar.</p>
+                </div>
+              ) : (
+                <PasoChecklist
+                  solicitudId={solicitud.id}
+                  vehiculo={solicitud.vehiculo}
+                  fotosIniciales={solicitud.fotosRevision}
+                  onDone={cargar}
+                />
+              )
             )}
 
-            {/* PASO 6: Cerrada */}
-            {paso === 6 && (
+            {/* PASO 3: Registrar km salida (checklist ya completado) */}
+            {paso === 3 && (
+              <PasoBitacora solicitudId={solicitud.id} bitacora={null} kmActualVehiculo={solicitud.vehiculo.kmActual} onDone={cargar} />
+            )}
+
+            {/* PASO 4: En viaje — paradas + km llegada + cierre automático */}
+            {paso === 4 && solicitud.bitacora && (
+              <PasoBitacora solicitudId={solicitud.id} bitacora={solicitud.bitacora} kmActualVehiculo={solicitud.vehiculo.kmActual} onDone={cargar} />
+            )}
+
+            {/* PASO 5: Cerrada */}
+            {paso === 5 && (
               <div className="text-center py-8">
                 <p className="text-4xl mb-3">🔒</p>
                 <p className="text-xl font-semibold text-gray-700">Proceso cerrado</p>

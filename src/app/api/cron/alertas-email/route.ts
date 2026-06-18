@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
     medicamentosCriticos,
     lotesVencidos,
     lotesPorVencer,
+    vencimientosVehiculo,
   ] = await Promise.all([
     prisma.$queryRaw<{ nombre: string; codigo: string; stockActual: number; stockMinimo: number; unidad: string }[]>`
       SELECT nombre, codigo, "stockActual", "stockMinimo", unidad
@@ -57,13 +58,30 @@ export async function GET(req: NextRequest) {
       orderBy: { fechaVencimiento: "asc" },
       take: 20,
     }),
+    prisma.vencimientoDocumentoVehiculo.findMany({
+      include: { vehiculo: { select: { patente: true } }, tipoDocumento: true },
+    }),
   ])
+
+  const vehiculosVencidos = vencimientosVehiculo
+    .filter((ve) => ve.fechaVencimiento < ahora)
+    .sort((a, b) => a.fechaVencimiento.getTime() - b.fechaVencimiento.getTime())
+  const vehiculosPorVencer = vencimientosVehiculo
+    .filter((ve) => {
+      if (ve.fechaVencimiento < ahora) return false
+      const umbral = ve.diasAlerta ?? ve.tipoDocumento.diasAlertaDefault
+      const limite = new Date(ahora.getTime() + umbral * 86400000)
+      return ve.fechaVencimiento <= limite
+    })
+    .sort((a, b) => a.fechaVencimiento.getTime() - b.fechaVencimiento.getTime())
 
   const hayAlertas =
     productosCriticos.length > 0 ||
     medicamentosCriticos.length > 0 ||
     lotesVencidos.length > 0 ||
-    lotesPorVencer.length > 0
+    lotesPorVencer.length > 0 ||
+    vehiculosVencidos.length > 0 ||
+    vehiculosPorVencer.length > 0
 
   if (!hayAlertas) {
     return NextResponse.json({ mensaje: "Sin alertas activas, no se envió email" })
@@ -151,6 +169,40 @@ export async function GET(req: NextRequest) {
     </table>
   ` : ""
 
+  const seccionVehiculosVencidos = vehiculosVencidos.length > 0 ? `
+    <h3 style="color:#dc2626;margin-top:20px">🚨 Flota: Documentos vencidos (${vehiculosVencidos.length})</h3>
+    <table border="0" cellpadding="6" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead style="background:#fef2f2"><tr>
+        <th align="left" style="border-bottom:1px solid #fecaca">Vehículo</th>
+        <th align="left" style="border-bottom:1px solid #fecaca">Documento</th>
+        <th align="left" style="border-bottom:1px solid #fecaca">Vencimiento</th>
+      </tr></thead>
+      <tbody>${rows(vehiculosVencidos.map((v) => `
+        <td style="border-bottom:1px solid #f1f5f9;font-family:monospace">${v.vehiculo.patente}</td>
+        <td style="border-bottom:1px solid #f1f5f9">${v.tipoDocumento.nombre}</td>
+        <td style="border-bottom:1px solid #f1f5f9;color:#dc2626;font-weight:bold">${formatFecha(v.fechaVencimiento)}</td>
+      `))}
+      </tbody>
+    </table>
+  ` : ""
+
+  const seccionVehiculosPorVencer = vehiculosPorVencer.length > 0 ? `
+    <h3 style="color:#d97706;margin-top:20px">⏰ Flota: Documentos próximos a vencer (${vehiculosPorVencer.length})</h3>
+    <table border="0" cellpadding="6" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead style="background:#fffbeb"><tr>
+        <th align="left" style="border-bottom:1px solid #fde68a">Vehículo</th>
+        <th align="left" style="border-bottom:1px solid #fde68a">Documento</th>
+        <th align="left" style="border-bottom:1px solid #fde68a">Vencimiento</th>
+      </tr></thead>
+      <tbody>${rows(vehiculosPorVencer.map((v) => `
+        <td style="border-bottom:1px solid #f1f5f9;font-family:monospace">${v.vehiculo.patente}</td>
+        <td style="border-bottom:1px solid #f1f5f9">${v.tipoDocumento.nombre}</td>
+        <td style="border-bottom:1px solid #f1f5f9;color:#d97706;font-weight:bold">${formatFecha(v.fechaVencimiento)}</td>
+      `))}
+      </tbody>
+    </table>
+  ` : ""
+
   const html = `
     <div style="font-family:sans-serif;max-width:650px;margin:0 auto;padding:24px">
       <h2 style="margin:0 0 4px">Alerta de inventario — IMO Stock</h2>
@@ -160,6 +212,8 @@ export async function GET(req: NextRequest) {
       ${seccionMedicamentos}
       ${seccionLotesVencidos}
       ${seccionLotesPorVencer}
+      ${seccionVehiculosVencidos}
+      ${seccionVehiculosPorVencer}
       <hr style="border:none;border-top:1px solid #e5e7eb;margin-top:24px;margin-bottom:12px">
       <p style="color:#9ca3af;font-size:11px;margin:0">Este mensaje fue generado automáticamente por IMO Stock. No responder este email.</p>
     </div>
@@ -180,6 +234,8 @@ export async function GET(req: NextRequest) {
       medicamentosCriticos: medicamentosCriticos.length,
       lotesVencidos: lotesVencidos.length,
       lotesPorVencer: lotesPorVencer.length,
+      vehiculosVencidos: vehiculosVencidos.length,
+      vehiculosPorVencer: vehiculosPorVencer.length,
     },
   })
 }

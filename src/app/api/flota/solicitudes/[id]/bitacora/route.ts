@@ -14,11 +14,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const solicitud = await prisma.solicitudVehiculo.findUnique({
     where: { id: parseInt(id) },
-    include: { ordenServicio: true, bitacora: true },
+    include: { ordenServicio: true, bitacora: true, checklist: true },
   })
   if (!solicitud) return NextResponse.json({ error: "No encontrado" }, { status: 404 })
   if (solicitud.estado !== "APROBADA" || !solicitud.ordenServicio?.firmada) {
     return NextResponse.json({ error: "La orden debe estar firmada antes de registrar salida" }, { status: 400 })
+  }
+  if (!solicitud.checklist) {
+    return NextResponse.json({ error: "Debe completar el checklist antes de registrar la salida" }, { status: 400 })
   }
   if (solicitud.bitacora) {
     return NextResponse.json({ error: "Bitácora ya iniciada" }, { status: 409 })

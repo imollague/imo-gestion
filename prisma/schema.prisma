@@ -34,6 +34,11 @@ model User {
   documentosFlota      DocumentoVehiculo[]
   hojaVidaFlota        HojaVidaVehiculo[]
   mantencionesFlota    MantencionVehiculo[]
+  observacionesCreadas ObservacionVehiculo[] @relation("CreadorObservacion")
+  observacionesCerradas ObservacionVehiculo[] @relation("CierreObservacion")
+  notasObservacion     ObservacionNota[]
+  archivosObservacion  ObservacionArchivo[]
+  conductorFlota       ConductorFlota?
 }
 
 enum Role {
@@ -267,18 +272,18 @@ model Vehiculo {
   tipo                  TipoVehiculo
   estado                EstadoVehiculo @default(OPERATIVO)
   kmActual              Int            @default(0)
-  vencimientoSOAP       DateTime?
-  vencimientoRevTecnica DateTime?
-  vencimientoPermiso    DateTime?
+  licenciasPermitidas   String[]       @default([]) // vacío = sin restricción de licencia
   observaciones         String?
   imagenUrl             String?
   activo                Boolean        @default(true)
   createdAt             DateTime       @default(now())
 
-  solicitudes  SolicitudVehiculo[]
-  mantenciones MantencionVehiculo[]
-  hojaVida     HojaVidaVehiculo[]
-  documentos   DocumentoVehiculo[]
+  solicitudes   SolicitudVehiculo[]
+  mantenciones  MantencionVehiculo[]
+  hojaVida      HojaVidaVehiculo[]
+  documentos    DocumentoVehiculo[]
+  vencimientos  VencimientoDocumentoVehiculo[]
+  observacionesVehiculo ObservacionVehiculo[]
 }
 
 model DocumentoVehiculo {
@@ -300,6 +305,8 @@ model SolicitudVehiculo {
   creadoPorId     Int
   creadoPor       User            @relation("CreadoPorFlota", fields: [creadoPorId], references: [id])
   conductorId     Int?
+  conductorFlotaId Int?
+  conductorFlota  ConductorFlota? @relation(fields: [conductorFlotaId], references: [id])
   conductorNombre String
   estado          EstadoSolicitud @default(PENDIENTE)
   destino         String
@@ -318,6 +325,24 @@ model SolicitudVehiculo {
   bitacora        BitacoraViaje?
   hojaVida        HojaVidaVehiculo[]
   fotosRevision   FotoRevisionVehiculo[]
+  observacionesSolicitud ObservacionVehiculo[]
+}
+
+// Roster de choferes — independiente de la cuenta de login, se puede vincular opcionalmente
+model ConductorFlota {
+  id              Int       @id @default(autoincrement())
+  nombre          String
+  rut             String?
+  numeroCaucion   String?
+  numeroLicencia  String?
+  tipoLicencia    String
+  fechaLicencia   DateTime?
+  activo          Boolean   @default(true)
+  userId          Int?      @unique
+  user            User?     @relation(fields: [userId], references: [id])
+  createdAt       DateTime  @default(now())
+
+  solicitudes SolicitudVehiculo[]
 }
 
 model FotoRevisionVehiculo {
@@ -430,4 +455,70 @@ model MantencionVehiculo {
   registradoEn DateTime       @default(now())
   usuarioId    Int
   usuario      User           @relation(fields: [usuarioId], references: [id])
+}
+
+// Catálogo de tipos de documento configurable (SOAP/Rev. Técnica/Permiso vienen por defecto, esDefault=true)
+model TipoDocumentoVehiculo {
+  id               Int      @id @default(autoincrement())
+  nombre           String
+  diasAlertaDefault Int     @default(30)
+  esDefault        Boolean  @default(false)
+  activo           Boolean  @default(true)
+
+  vencimientos VencimientoDocumentoVehiculo[]
+}
+
+// Vencimiento de un documento puntual de un vehículo
+model VencimientoDocumentoVehiculo {
+  id              Int                   @id @default(autoincrement())
+  vehiculoId      Int
+  vehiculo        Vehiculo              @relation(fields: [vehiculoId], references: [id])
+  tipoDocumentoId Int
+  tipoDocumento   TipoDocumentoVehiculo @relation(fields: [tipoDocumentoId], references: [id])
+  fechaVencimiento DateTime
+  diasAlerta      Int?                  // override del diasAlertaDefault del catálogo
+
+  @@unique([vehiculoId, tipoDocumentoId])
+}
+
+// Observación sobre el estado del vehículo (ej. daño, neumático) — trazable hasta su cierre
+model ObservacionVehiculo {
+  id           Int                @id @default(autoincrement())
+  vehiculoId   Int
+  vehiculo     Vehiculo           @relation(fields: [vehiculoId], references: [id])
+  solicitudId  Int?
+  solicitud    SolicitudVehiculo? @relation(fields: [solicitudId], references: [id])
+  origen       String             // CHECKLIST | MANUAL
+  descripcion  String
+  estado       String             @default("ABIERTA") // ABIERTA | CERRADA
+  creadoPorId  Int?
+  creadoPor    User?              @relation("CreadorObservacion", fields: [creadoPorId], references: [id])
+  fecha        DateTime           @default(now())
+  cerradoPorId Int?
+  cerradoPor   User?              @relation("CierreObservacion", fields: [cerradoPorId], references: [id])
+  fechaCierre  DateTime?
+
+  notas    ObservacionNota[]
+  archivos ObservacionArchivo[]
+}
+
+model ObservacionNota {
+  id            Int                  @id @default(autoincrement())
+  observacionId Int
+  observacion   ObservacionVehiculo  @relation(fields: [observacionId], references: [id], onDelete: Cascade)
+  texto         String
+  autorId       Int
+  autor         User                 @relation(fields: [autorId], references: [id])
+  fecha         DateTime             @default(now())
+}
+
+model ObservacionArchivo {
+  id            Int                  @id @default(autoincrement())
+  observacionId Int
+  observacion   ObservacionVehiculo  @relation(fields: [observacionId], references: [id], onDelete: Cascade)
+  nombre        String
+  url           String
+  subidoPorId   Int
+  subidoPor     User                 @relation(fields: [subidoPorId], references: [id])
+  fecha         DateTime             @default(now())
 }
