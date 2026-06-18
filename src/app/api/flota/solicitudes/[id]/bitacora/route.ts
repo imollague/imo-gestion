@@ -63,7 +63,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: `El km de llegada debe ser mayor al de salida (${solicitud.bitacora.kmSalida} km)` }, { status: 400 })
   }
 
-  const [bitacora] = await prisma.$transaction([
+  const userId = parseInt(auth.session.user.id)
+  const kmRecorridos = parseInt(kmLlegada) - solicitud.bitacora.kmSalida
+  const obsTexto = observacion?.trim() || `Viaje a ${solicitud.destino} — ${kmRecorridos} km recorridos`
+
+  await prisma.$transaction([
     prisma.bitacoraViaje.update({
       where: { solicitudId: parseInt(id) },
       data: {
@@ -76,7 +80,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       where: { id: solicitud.vehiculoId },
       data: { kmActual: parseInt(kmLlegada) },
     }),
+    prisma.solicitudVehiculo.update({
+      where: { id: parseInt(id) },
+      data: { estado: "CERRADA", fechaCierre: new Date(), cerradoPorId: userId },
+    }),
+    prisma.hojaVidaVehiculo.create({
+      data: {
+        vehiculoId: solicitud.vehiculoId,
+        solicitudId: parseInt(id),
+        tipo: "USO",
+        descripcion: obsTexto,
+        usuarioId: userId,
+      },
+    }),
   ])
 
-  return NextResponse.json(bitacora)
+  return NextResponse.json({ ok: true })
 }

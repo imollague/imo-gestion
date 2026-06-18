@@ -56,8 +56,9 @@ export default function FlotaPage() {
   useEffect(() => {
     if (session) {
       fetch("/api/flota/vehiculos")
-        .then((r) => r.json())
+        .then((r) => { if (!r.ok) throw new Error(); return r.json() })
         .then((d) => { setVehiculos(d); setCargando(false) })
+        .catch(() => { setCargando(false) })
     }
   }, [session])
 

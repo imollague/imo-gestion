@@ -313,10 +313,20 @@ model SolicitudVehiculo {
   cerradoPorId    Int?
   cerradoPor      User?           @relation("CierreFlota", fields: [cerradoPorId], references: [id])
 
-  checklist     ChecklistSolicitud?
-  ordenServicio OrdenServicioFlota?
-  bitacora      BitacoraViaje?
-  hojaVida      HojaVidaVehiculo[]
+  checklist       ChecklistSolicitud?
+  ordenServicio   OrdenServicioFlota?
+  bitacora        BitacoraViaje?
+  hojaVida        HojaVidaVehiculo[]
+  fotosRevision   FotoRevisionVehiculo[]
+}
+
+model FotoRevisionVehiculo {
+  id          Int               @id @default(autoincrement())
+  solicitudId Int
+  solicitud   SolicitudVehiculo @relation(fields: [solicitudId], references: [id])
+  tipo        String            // FRONTAL | LATERAL_IZQ | LATERAL_DER | POSTERIOR
+  url         String
+  fecha       DateTime          @default(now())
 }
 
 model ChecklistSolicitud {
@@ -375,14 +385,23 @@ model BitacoraViaje {
 }
 
 model ParadaViaje {
-  id             Int           @id @default(autoincrement())
+  id             Int             @id @default(autoincrement())
   bitacoraId     Int
-  bitacora       BitacoraViaje @relation(fields: [bitacoraId], references: [id])
+  bitacora       BitacoraViaje   @relation(fields: [bitacoraId], references: [id])
   km             Int
   descripcion    String?
   litros         Float?
   comprobanteRef String?
-  fecha          DateTime      @default(now())
+  fecha          DateTime        @default(now())
+  pasajeros      PasajeroViaje[]
+}
+
+model PasajeroViaje {
+  id        Int         @id @default(autoincrement())
+  paradaId  Int
+  parada    ParadaViaje @relation(fields: [paradaId], references: [id], onDelete: Cascade)
+  nombre    String
+  rut       String?
 }
 
 model HojaVidaVehiculo {

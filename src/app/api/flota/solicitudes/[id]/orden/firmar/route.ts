@@ -9,24 +9,33 @@ export async function POST(_: NextRequest, { params }: { params: Promise<{ id: s
   const { id } = await params
   const solicitud = await prisma.solicitudVehiculo.findUnique({
     where: { id: parseInt(id) },
-    include: { ordenServicio: true },
+    include: { ordenServicio: true, checklist: true },
   })
   if (!solicitud) return NextResponse.json({ error: "No encontrado" }, { status: 404 })
+  if (!solicitud.checklist) {
+    return NextResponse.json({ error: "El checklist debe completarse antes de autorizar" }, { status: 400 })
+  }
   if (!solicitud.ordenServicio) {
     return NextResponse.json({ error: "No existe orden de servicio" }, { status: 400 })
   }
   if (solicitud.ordenServicio.firmada) {
-    return NextResponse.json({ error: "Orden ya firmada" }, { status: 409 })
+    return NextResponse.json({ error: "Orden ya autorizada" }, { status: 409 })
   }
 
-  const orden = await prisma.ordenServicioFlota.update({
-    where: { solicitudId: parseInt(id) },
-    data: {
-      firmada: true,
-      firmadaPorId: parseInt(auth.session.user.id),
-      fechaFirma: new Date(),
-    },
-  })
+  await prisma.$transaction([
+    prisma.ordenServicioFlota.update({
+      where: { solicitudId: parseInt(id) },
+      data: {
+        firmada: true,
+        firmadaPorId: parseInt(auth.session.user.id),
+        fechaFirma: new Date(),
+      },
+    }),
+    prisma.solicitudVehiculo.update({
+      where: { id: parseInt(id) },
+      data: { estado: "APROBADA", aprobadoPorId: parseInt(auth.session.user.id), fechaAprobacion: new Date() },
+    }),
+  ])
 
-  return NextResponse.json(orden)
+  return NextResponse.json({ ok: true })
 }
