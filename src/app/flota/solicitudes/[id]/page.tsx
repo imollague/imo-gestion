@@ -845,16 +845,34 @@ export default function SolicitudDetallePage() {
 
             {/* PASO 1: Checklist (conductor, inmediatamente tras crear) */}
             {paso === 1 && (
-              <PasoChecklist
-                solicitudId={solicitud.id}
-                vehiculo={solicitud.vehiculo}
-                fotosIniciales={solicitud.fotosRevision}
-                onDone={cargar}
-              />
+              role === "ENCARGADO" ? (
+                <div className="text-center py-10">
+                  <p className="text-4xl mb-3">⏳</p>
+                  <p className="text-xl font-semibold text-gray-700">Esperando al conductor</p>
+                  <p className="text-gray-400 mt-2">El conductor debe completar el checklist antes de continuar.</p>
+                </div>
+              ) : (
+                <PasoChecklist
+                  solicitudId={solicitud.id}
+                  vehiculo={solicitud.vehiculo}
+                  fotosIniciales={solicitud.fotosRevision}
+                  onDone={cargar}
+                />
+              )
             )}
 
             {/* PASO 2: Generar OS (conductor) */}
-            {paso === 2 && <PasoOrden solicitudId={solicitud.id} onDone={cargar} />}
+            {paso === 2 && (
+              role === "ENCARGADO" ? (
+                <div className="text-center py-10">
+                  <p className="text-4xl mb-3">⏳</p>
+                  <p className="text-xl font-semibold text-gray-700">Esperando al conductor</p>
+                  <p className="text-gray-400 mt-2">El conductor debe generar la Orden de Servicio antes de continuar.</p>
+                </div>
+              ) : (
+                <PasoOrden solicitudId={solicitud.id} onDone={cargar} />
+              )
+            )}
 
             {/* PASO 3: Encargado/Admin autoriza OS */}
             {paso === 3 && (
