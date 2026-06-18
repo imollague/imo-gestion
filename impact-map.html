@@ -346,6 +346,7 @@
           <div class="deliverables">
             <div class="deliverable done"><div class="status-dot"></div>Registro km salida con teclado numérico grande</div>
             <div class="deliverable done"><div class="status-dot"></div>Paradas del viaje (km + motivo + combustible opcional)</div>
+            <div class="deliverable done"><div class="status-dot"></div>Pasajeros por parada con autocompletado por RUT/nombre</div>
             <div class="deliverable done"><div class="status-dot"></div>Registro km llegada con validación de coherencia</div>
             <div class="deliverable done"><div class="status-dot"></div>Cierre inmutable con resumen del viaje</div>
           </div>
@@ -532,7 +533,7 @@
         <div class="module-items">
           <div class="module-item">~15 vehículos con alertas documentales</div>
           <div class="module-item">Flujo digital: solicitud → checklist → OS → bitácora → cierre</div>
-          <div class="module-item">Paradas de viaje con combustible opcional</div>
+          <div class="module-item">Paradas de viaje: combustible y pasajeros opcionales</div>
           <div class="module-item">Roles: Conductor / Encargado / Admin</div>
           <div class="module-item">PDF Orden de Servicio para FEDOKS</div>
           <div class="module-item">Mobile-first (conductores 50+ años)</div>
@@ -749,8 +750,8 @@ const FLUJOS = {
       {
         actor: "conductor", badge: "badge-conductor", label: "Conductor",
         titulo: "Registra paradas durante el viaje",
-        desc: "Por cada parada ingresa el km en ese momento y el motivo (opcional). Si hay carga de combustible, activa la casilla e ingresa litros y número de comprobante.",
-        nota: "Puede registrar múltiples paradas. Cada una queda con fecha y hora automática. Sin paradas también es válido.",
+        desc: "Por cada parada ingresa el km y el motivo (opcional). Puede agregar pasajeros por nombre o RUT — el sistema autocompleta desde viajes anteriores. Si hay carga de combustible, activa la casilla e ingresa litros y número de comprobante.",
+        nota: "Múltiples paradas posibles. Los pasajeros quedan en historial para autocompletar en futuros viajes. Sin paradas también es válido.",
         status: "done"
       },
       {
