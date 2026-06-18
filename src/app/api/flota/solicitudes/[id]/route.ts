@@ -27,7 +27,10 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
       },
       bitacora: {
         include: {
-          paradas: { orderBy: { fecha: "asc" } },
+          paradas: {
+            orderBy: { fecha: "asc" },
+            include: { pasajeros: { orderBy: { id: "asc" } } },
+          },
         },
       },
       hojaVida: {

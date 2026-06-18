@@ -385,14 +385,23 @@ model BitacoraViaje {
 }
 
 model ParadaViaje {
-  id             Int           @id @default(autoincrement())
+  id             Int             @id @default(autoincrement())
   bitacoraId     Int
-  bitacora       BitacoraViaje @relation(fields: [bitacoraId], references: [id])
+  bitacora       BitacoraViaje   @relation(fields: [bitacoraId], references: [id])
   km             Int
   descripcion    String?
   litros         Float?
   comprobanteRef String?
-  fecha          DateTime      @default(now())
+  fecha          DateTime        @default(now())
+  pasajeros      PasajeroViaje[]
+}
+
+model PasajeroViaje {
+  id        Int         @id @default(autoincrement())
+  paradaId  Int
+  parada    ParadaViaje @relation(fields: [paradaId], references: [id], onDelete: Cascade)
+  nombre    String
+  rut       String?
 }
 
 model HojaVidaVehiculo {

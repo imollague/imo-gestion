@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { useSession } from "next-auth/react"
 import Layout from "@/components/Layout"
@@ -8,8 +8,10 @@ import jsPDF from "jspdf"
 
 interface ChecklistItem { id: number; categoria: string; descripcion: string; orden: number }
 interface ChecklistRespuesta { itemId: number; valor: string; observacion: string }
-interface ParadaViaje { id: number; km: number; descripcion: string | null; litros: number | null; comprobanteRef: string | null; fecha: string }
+interface PasajeroViaje { id: number; nombre: string; rut: string | null }
+interface ParadaViaje { id: number; km: number; descripcion: string | null; litros: number | null; comprobanteRef: string | null; fecha: string; pasajeros: PasajeroViaje[] }
 interface FotoRevision { id: number; tipo: string; url: string }
+interface PasajeroForm { nombre: string; rut: string }
 
 interface Solicitud {
   id: number
@@ -112,6 +114,95 @@ function generarPDFOrden(s: Solicitud) {
 
 // ─── Componentes de cada paso ────────────────────────
 
+function PasajerosInput({ value, onChange }: {
+  value: PasajeroForm[]
+  onChange: (p: PasajeroForm[]) => void
+}) {
+  const [nombre, setNombre] = useState("")
+  const [rut, setRut] = useState("")
+  const [sugerencias, setSugerencias] = useState<{ nombre: string; rut: string | null }[]>([])
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (nombre.length < 2) { setSugerencias([]); return }
+    const t = setTimeout(async () => {
+      const res = await fetch(`/api/flota/pasajeros/buscar?q=${encodeURIComponent(nombre)}`)
+      if (res.ok) setSugerencias(await res.json())
+    }, 300)
+    return () => clearTimeout(t)
+  }, [nombre])
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setSugerencias([])
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
+
+  const agregar = (n: string, r?: string | null) => {
+    if (!n.trim()) return
+    onChange([...value, { nombre: n.trim(), rut: r?.trim() ?? "" }])
+    setNombre(""); setRut(""); setSugerencias([])
+  }
+
+  const remover = (i: number) => onChange(value.filter((_, idx) => idx !== i))
+
+  return (
+    <div>
+      <label className="block text-xs text-gray-500 mb-2">Pasajeros <span className="text-gray-400">(opcional)</span></label>
+      {value.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {value.map((p, i) => (
+            <span key={i} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded-full border border-blue-100">
+              {p.nombre}{p.rut ? ` · ${p.rut}` : ""}
+              <button type="button" onClick={() => remover(i)} className="text-blue-400 hover:text-blue-700 ml-0.5">✕</button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2" ref={dropdownRef}>
+        <div className="relative flex-1">
+          <input
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); agregar(nombre, rut) } }}
+            placeholder="Nombre"
+            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+          />
+          {sugerencias.length > 0 && (
+            <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-30 overflow-hidden">
+              {sugerencias.map((s, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); agregar(s.nombre, s.rut) }}
+                  className="w-full text-left px-3 py-2.5 text-sm hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
+                >
+                  <span className="font-medium text-gray-800">{s.nombre}</span>
+                  {s.rut && <span className="text-gray-400 ml-2 text-xs">{s.rut}</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <input
+          value={rut}
+          onChange={(e) => setRut(e.target.value)}
+          placeholder="RUT (opcional)"
+          className="w-32 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+        />
+        <button
+          type="button"
+          onClick={() => agregar(nombre, rut)}
+          disabled={!nombre.trim()}
+          className="px-3 py-2 bg-gray-700 text-white rounded-lg text-sm font-semibold hover:bg-gray-800 disabled:opacity-40 transition-colors"
+        >+</button>
+      </div>
+    </div>
+  )
+}
+
 const FOTO_TIPOS = [
   { value: "FRONTAL", label: "Frontal", icon: "⬆️" },
   { value: "LATERAL_IZQ", label: "Lateral Izq.", icon: "⬅️" },
@@ -139,7 +230,7 @@ function FotosChecklist({ solicitudId, fotosIniciales }: {
     }
   }
 
-  const eliminarFoto = async (fotoId: number, tipo: string) => {
+  const eliminarFoto = async (fotoId: number) => {
     const res = await fetch(`/api/flota/solicitudes/${solicitudId}/checklist/fotos`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
@@ -161,7 +252,7 @@ function FotosChecklist({ solicitudId, fotosIniciales }: {
                   <img src={foto.url} alt={label} className="w-full h-24 object-cover" />
                   <div className="flex items-center justify-between px-2 py-1 bg-white">
                     <span className="text-xs text-green-700 font-medium">{icon} {label} ✓</span>
-                    <button onClick={() => eliminarFoto(foto.id, value)}
+                    <button onClick={() => eliminarFoto(foto.id)}
                       className="text-xs text-red-400 hover:text-red-600">✕</button>
                   </div>
                 </div>
@@ -362,6 +453,7 @@ function PasoBitacora({ solicitudId, bitacora, onDone }: {
   const [horaRetorno, setHoraRetorno] = useState("")
   const [observacion, setObservacion] = useState("")
   const [paradaForm, setParadaForm] = useState({ km: "", descripcion: "", litros: "", comprobanteRef: "" })
+  const [paradaPasajeros, setParadaPasajeros] = useState<PasajeroForm[]>([])
   const [mostrarCombustible, setMostrarCombustible] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -391,11 +483,13 @@ function PasoBitacora({ solicitudId, bitacora, onDone }: {
         descripcion: paradaForm.descripcion || null,
         litros: mostrarCombustible ? paradaForm.litros : null,
         comprobanteRef: mostrarCombustible ? paradaForm.comprobanteRef || null : null,
+        pasajeros: paradaPasajeros.length > 0 ? paradaPasajeros : undefined,
       }),
     })
     setLoading(false)
     if (!res.ok) { const d = await res.json(); setError(d.error); return }
     setParadaForm({ km: "", descripcion: "", litros: "", comprobanteRef: "" })
+    setParadaPasajeros([])
     setMostrarCombustible(false)
     onDone()
   }
@@ -457,17 +551,28 @@ function PasoBitacora({ solicitudId, bitacora, onDone }: {
           <div className="space-y-2 mb-4">
             {bitacora.paradas.map((p) => (
               <div key={p.id} className="bg-gray-50 rounded-lg px-4 py-3 text-sm">
-                <div className="flex items-center justify-between">
+                <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <span className="font-medium text-gray-800">{p.km.toLocaleString()} km</span>
-                    {p.descripcion && <span className="text-gray-500 ml-2">— {p.descripcion}</span>}
-                    {p.litros && (
-                      <span className="ml-2 text-blue-600 text-xs font-medium">
-                        ⛽ {p.litros} L{p.comprobanteRef ? ` · ${p.comprobanteRef}` : ""}
-                      </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-gray-800">{p.km.toLocaleString()} km</span>
+                      {p.descripcion && <span className="text-gray-500">— {p.descripcion}</span>}
+                      {p.litros && (
+                        <span className="text-blue-600 text-xs font-medium">
+                          ⛽ {p.litros} L{p.comprobanteRef ? ` · ${p.comprobanteRef}` : ""}
+                        </span>
+                      )}
+                    </div>
+                    {p.pasajeros.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {p.pasajeros.map((pas) => (
+                          <span key={pas.id} className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full border border-blue-100">
+                            {pas.nombre}{pas.rut ? ` · ${pas.rut}` : ""}
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <span className="text-gray-400 text-xs">{fmtFecha(p.fecha)}</span>
                     <button
                       onClick={async () => {
@@ -507,6 +612,8 @@ function PasoBitacora({ solicitudId, bitacora, onDone }: {
                 className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
             </div>
           </div>
+
+          <PasajerosInput value={paradaPasajeros} onChange={setParadaPasajeros} />
 
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input type="checkbox" checked={mostrarCombustible}
@@ -573,66 +680,6 @@ function PasoBitacora({ solicitudId, bitacora, onDone }: {
   )
 }
 
-function PasoCierre({ solicitudId, bitacora, onDone }: {
-  solicitudId: number
-  bitacora: NonNullable<Solicitud["bitacora"]>
-  onDone: () => void
-}) {
-  const [obs, setObs] = useState(bitacora.observacion ?? "")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
-
-  const kmRecorridos = (bitacora.kmLlegada ?? 0) - bitacora.kmSalida
-  const totalLitros = bitacora.paradas.reduce((s, p) => s + (p.litros ?? 0), 0)
-
-  const handleCierre = async () => {
-    if (!confirm("¿Cerrar el proceso? Esta acción es irreversible y no podrá modificarse.")) return
-    setLoading(true)
-    const res = await fetch(`/api/flota/solicitudes/${solicitudId}/cerrar`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ observacionHojaVida: obs }),
-    })
-    setLoading(false)
-    if (!res.ok) { const d = await res.json(); setError(d.error); return }
-    onDone()
-  }
-
-  return (
-    <div className="space-y-5">
-      <div className="bg-blue-50 rounded-xl p-5 space-y-3">
-        <p className="font-semibold text-gray-800 mb-2">Resumen del viaje</p>
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <div className="bg-white rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-gray-800">{kmRecorridos.toLocaleString()}</p>
-            <p className="text-gray-500 text-xs">km recorridos</p>
-          </div>
-          <div className="bg-white rounded-lg p-3 text-center">
-            <p className="text-2xl font-bold text-gray-800">{totalLitros > 0 ? totalLitros.toFixed(1) : "—"}</p>
-            <p className="text-gray-500 text-xs">litros cargados</p>
-          </div>
-        </div>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Observación para hoja de vida del vehículo
-        </label>
-        <textarea value={obs} onChange={(e) => setObs(e.target.value)}
-          rows={3} placeholder="Sin novedades / descripción del viaje"
-          className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
-      </div>
-      {error && <p className="text-red-600 text-sm">{error}</p>}
-      <button onClick={handleCierre} disabled={loading}
-        className="w-full bg-green-600 text-white py-4 rounded-xl text-lg font-bold hover:bg-green-700 disabled:opacity-50 transition-colors">
-        {loading ? "Cerrando..." : "🔒 Cerrar Proceso"}
-      </button>
-      <p className="text-xs text-gray-400 text-center">
-        Una vez cerrado el proceso no podrá ser modificado.
-      </p>
-    </div>
-  )
-}
-
 // ─── Página principal ─────────────────────────────────
 
 export default function SolicitudDetallePage() {
@@ -657,13 +704,6 @@ export default function SolicitudDetallePage() {
   }, [session, id])
 
   useEffect(() => { cargar() }, [cargar])
-
-  const aprobar = async () => {
-    setLoadingAction(true)
-    const res = await fetch(`/api/flota/solicitudes/${id}/aprobar`, { method: "POST" })
-    setLoadingAction(false)
-    if (res.ok) cargar()
-  }
 
   const rechazar = async () => {
     if (!motivoRechazo.trim()) return

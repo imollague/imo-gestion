@@ -233,18 +233,29 @@ model BitacoraViaje {
   observacion     String?
   registradoEn    DateTime          @default(now())
 
-  cargas          CargaCombustible[]
+  paradas         ParadaViaje[]
 }
 
-// Registro individual por carga — puede haber múltiples por viaje
-model CargaCombustible {
-  id             Int           @id @default(autoincrement())
+// Parada durante el viaje — km obligatorio, motivo + combustible opcionales, pasajeros opcionales
+model ParadaViaje {
+  id             Int             @id @default(autoincrement())
   bitacoraId     Int
-  bitacora       BitacoraViaje @relation(...)
-  kmAlMomento    Int
-  litros         Float
+  bitacora       BitacoraViaje   @relation(...)
+  km             Int
+  descripcion    String?
+  litros         Float?
   comprobanteRef String?
-  fecha          DateTime      @default(now())
+  fecha          DateTime        @default(now())
+  pasajeros      PasajeroViaje[]
+}
+
+// Pasajeros por parada — con RUT opcional para autocompletado en futuros viajes
+model PasajeroViaje {
+  id        Int         @id @default(autoincrement())
+  paradaId  Int
+  parada    ParadaViaje @relation(..., onDelete: Cascade)
+  nombre    String
+  rut       String?
 }
 
 model HojaVidaVehiculo {
@@ -310,6 +321,7 @@ model MantencionVehiculo {
 - [x] Navbar responsive con hamburger menu móvil
 - [x] Hardening: validaciones km, estado vehículo, alertas por rol, tipos TypeScript
 - [x] **Flujo v2 (2026-06-08):** checklist + OS disponibles desde creación (sin aprobación previa); encargado autoriza OS; km llegada auto-cierra proceso; fotos del vehículo en checklist (FRONTAL/LATERAL x2/POSTERIOR, captura cámara móvil)
+- [x] **Pasajeros por parada (2026-06-17):** campo opcional en cada parada del viaje; autocompletado por nombre/RUT desde historial de viajes anteriores; modelo `PasajeroViaje` con `onDelete: Cascade` desde `ParadaViaje`; API `GET /api/flota/pasajeros/buscar?q=`
 
 ### Fase 2 — Mantenciones y reportes
 - [ ] Registro de mantenciones (modelo MantencionVehiculo ya existe en schema)

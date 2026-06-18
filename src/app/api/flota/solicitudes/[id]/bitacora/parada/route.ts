@@ -7,7 +7,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!auth.ok) return auth.response
 
   const { id } = await params
-  const { km, descripcion, litros, comprobanteRef } = await req.json()
+  const { km, descripcion, litros, comprobanteRef, pasajeros } = await req.json()
 
   if (km == null) {
     return NextResponse.json({ error: "Km es obligatorio" }, { status: 400 })
@@ -22,6 +22,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Solicitud no está en curso" }, { status: 400 })
   }
 
+  const pasajerosData = Array.isArray(pasajeros)
+    ? pasajeros
+        .filter((p: { nombre?: string }) => p.nombre?.trim())
+        .map((p: { nombre: string; rut?: string }) => ({ nombre: p.nombre.trim(), rut: p.rut?.trim() || null }))
+    : []
+
   const parada = await prisma.paradaViaje.create({
     data: {
       bitacoraId: solicitud.bitacora.id,
@@ -29,7 +35,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       descripcion: descripcion?.trim() || null,
       litros: litros ? parseFloat(litros) : null,
       comprobanteRef: comprobanteRef?.trim() || null,
+      pasajeros: pasajerosData.length > 0 ? { create: pasajerosData } : undefined,
     },
+    include: { pasajeros: { orderBy: { id: "asc" } } },
   })
 
   return NextResponse.json(parada, { status: 201 })
