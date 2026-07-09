@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireRole } from "@/lib/apiAuth"
+import { requireRole, denyIfNotOwner } from "@/lib/apiAuth"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
+  const auth = await requireRole("FLOTA")
   if (!auth.ok) return auth.response
 
   const { id } = await params
@@ -18,6 +18,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     include: { bitacora: true },
   })
   if (!solicitud?.bitacora) return NextResponse.json({ error: "Bitácora no iniciada" }, { status: 404 })
+
+  const denyPost = denyIfNotOwner(auth, solicitud.creadoPorId)
+  if (denyPost) return denyPost
+
   if (solicitud.estado !== "EN_CURSO") {
     return NextResponse.json({ error: "Solicitud no está en curso" }, { status: 400 })
   }
@@ -44,14 +48,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
+  const auth = await requireRole("FLOTA")
   if (!auth.ok) return auth.response
 
   const { id } = await params
   const { paradaId } = await req.json()
 
-  const solicitud = await prisma.solicitudVehiculo.findUnique({ where: { id: parseInt(id) } })
-  if (solicitud?.estado === "CERRADA") {
+  const solicitudDel = await prisma.solicitudVehiculo.findUnique({ where: { id: parseInt(id) } })
+  if (!solicitudDel) return NextResponse.json({ error: "No encontrado" }, { status: 404 })
+
+  const denyDel = denyIfNotOwner(auth, solicitudDel.creadoPorId)
+  if (denyDel) return denyDel
+
+  if (solicitudDel.estado === "CERRADA") {
     return NextResponse.json({ error: "Proceso cerrado, no se puede modificar" }, { status: 400 })
   }
 

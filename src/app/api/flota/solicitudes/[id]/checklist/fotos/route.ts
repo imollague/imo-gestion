@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireRole } from "@/lib/apiAuth"
+import { requireRole, denyIfNotOwner } from "@/lib/apiAuth"
 import { uploadFile, deleteFile, extractStoragePath } from "@/lib/storage"
 
 const TIPOS_VALIDOS = ["FRONTAL", "LATERAL_IZQ", "LATERAL_DER", "POSTERIOR"]
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
+  const auth = await requireRole("FLOTA")
   if (!auth.ok) return auth.response
 
   const { id } = await params
@@ -14,6 +14,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const solicitud = await prisma.solicitudVehiculo.findUnique({ where: { id: solicitudId } })
   if (!solicitud) return NextResponse.json({ error: "No encontrado" }, { status: 404 })
+
+  const denyPost = denyIfNotOwner(auth, solicitud.creadoPorId)
+  if (denyPost) return denyPost
+
   if (solicitud.estado === "CERRADA") return NextResponse.json({ error: "Proceso cerrado" }, { status: 400 })
 
   const formData = await req.formData()
@@ -46,11 +50,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
+  const auth = await requireRole("FLOTA")
   if (!auth.ok) return auth.response
 
   const { id } = await params
   const { fotoId } = await req.json()
+
+  const solicitudDel = await prisma.solicitudVehiculo.findUnique({ where: { id: parseInt(id) } })
+  if (!solicitudDel) return NextResponse.json({ error: "No encontrado" }, { status: 404 })
+
+  const denyDel = denyIfNotOwner(auth, solicitudDel.creadoPorId)
+  if (denyDel) return denyDel
 
   const foto = await prisma.fotoRevisionVehiculo.findUnique({ where: { id: parseInt(fotoId) } })
   if (!foto) return NextResponse.json({ error: "No encontrado" }, { status: 404 })

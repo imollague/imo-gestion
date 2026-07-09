@@ -16,6 +16,7 @@ export const authOptions = {
 
         const user = await prisma.user.findUnique({
           where: { username: credentials.username },
+          include: { conductorFlota: { select: { id: true } } },
         })
 
         if (!user || !user.active) return null
@@ -28,6 +29,7 @@ export const authOptions = {
           name: user.name,
           username: user.username,
           role: user.role,
+          conductorFlotaId: user.conductorFlota?.id ?? null,
         }
       },
     }),
@@ -38,6 +40,7 @@ export const authOptions = {
         token.id = user.id
         token.username = user.username
         token.role = user.role
+        token.conductorFlotaId = user.conductorFlotaId
       }
       return token
     },
@@ -46,6 +49,7 @@ export const authOptions = {
         session.user.id = token.id
         session.user.username = token.username
         session.user.role = token.role
+        session.user.conductorFlotaId = token.conductorFlotaId
       }
       return session
     },

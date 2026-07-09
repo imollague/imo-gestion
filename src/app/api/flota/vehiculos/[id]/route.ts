@@ -26,6 +26,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
           conductorNombre: true, fechaSolicitud: true, fechaCierre: true,
         },
       },
+      vencimientos: { include: { tipoDocumento: true } },
     },
   })
 
@@ -38,26 +39,51 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!auth.ok) return auth.response
 
   const { id } = await params
+  const vehiculoId = parseInt(id)
   const body = await req.json()
   const { patente, marca, modelo, anio, tipo, estado, kmActual,
-    vencimientoSOAP, vencimientoRevTecnica, vencimientoPermiso, observaciones } = body
+    licenciasPermitidas, observaciones, vencimientos } = body
 
-  const vehiculo = await prisma.vehiculo.update({
-    where: { id: parseInt(id) },
-    data: {
-      ...(patente && { patente: patente.toUpperCase().trim() }),
-      ...(marca && { marca }),
-      ...(modelo && { modelo }),
-      ...(anio && { anio: parseInt(anio) }),
-      ...(tipo && { tipo }),
-      ...(estado && { estado }),
-      ...(kmActual !== undefined && { kmActual: parseInt(kmActual) }),
-      ...(vencimientoSOAP !== undefined && { vencimientoSOAP: vencimientoSOAP ? new Date(vencimientoSOAP) : null }),
-      ...(vencimientoRevTecnica !== undefined && { vencimientoRevTecnica: vencimientoRevTecnica ? new Date(vencimientoRevTecnica) : null }),
-      ...(vencimientoPermiso !== undefined && { vencimientoPermiso: vencimientoPermiso ? new Date(vencimientoPermiso) : null }),
-      ...(observaciones !== undefined && { observaciones }),
-    },
-  })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const operaciones: any[] = [
+    prisma.vehiculo.update({
+      where: { id: vehiculoId },
+      data: {
+        ...(patente && { patente: patente.toUpperCase().trim() }),
+        ...(marca && { marca }),
+        ...(modelo && { modelo }),
+        ...(anio && { anio: parseInt(anio) }),
+        ...(tipo && { tipo }),
+        ...(estado && { estado }),
+        ...(kmActual !== undefined && { kmActual: parseInt(kmActual) }),
+        ...(licenciasPermitidas !== undefined && { licenciasPermitidas }),
+        ...(observaciones !== undefined && { observaciones }),
+      },
+    }),
+  ]
+
+  // vencimientos: [{ tipoDocumentoId, fechaVencimiento }] — fechaVencimiento vacía borra el registro
+  if (Array.isArray(vencimientos)) {
+    for (const v of vencimientos as { tipoDocumentoId: number; fechaVencimiento: string | null }[]) {
+      if (v.fechaVencimiento) {
+        operaciones.push(
+          prisma.vencimientoDocumentoVehiculo.upsert({
+            where: { vehiculoId_tipoDocumentoId: { vehiculoId, tipoDocumentoId: v.tipoDocumentoId } },
+            update: { fechaVencimiento: new Date(v.fechaVencimiento) },
+            create: { vehiculoId, tipoDocumentoId: v.tipoDocumentoId, fechaVencimiento: new Date(v.fechaVencimiento) },
+          })
+        )
+      } else {
+        operaciones.push(
+          prisma.vencimientoDocumentoVehiculo.deleteMany({
+            where: { vehiculoId, tipoDocumentoId: v.tipoDocumentoId },
+          })
+        )
+      }
+    }
+  }
+
+  const [vehiculo] = await prisma.$transaction(operaciones)
 
   return NextResponse.json(vehiculo)
 }

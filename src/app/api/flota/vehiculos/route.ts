@@ -14,27 +14,21 @@ export async function GET() {
         where: { estado: { in: ["PENDIENTE", "APROBADA", "EN_CURSO"] } },
         select: { id: true, estado: true },
       },
+      vencimientos: { include: { tipoDocumento: true } },
     },
   })
 
   const hoy = new Date()
   const data = vehiculos.map((v) => {
-    const diasSOAP = v.vencimientoSOAP
-      ? Math.ceil((v.vencimientoSOAP.getTime() - hoy.getTime()) / 86400000)
-      : null
-    const diasRevTecnica = v.vencimientoRevTecnica
-      ? Math.ceil((v.vencimientoRevTecnica.getTime() - hoy.getTime()) / 86400000)
-      : null
-    const diasPermiso = v.vencimientoPermiso
-      ? Math.ceil((v.vencimientoPermiso.getTime() - hoy.getTime()) / 86400000)
-      : null
-
-    const alertaDoc = [diasSOAP, diasRevTecnica, diasPermiso].some(
-      (d) => d !== null && d <= 30
-    )
+    const vencimientosConDias = v.vencimientos.map((ve) => {
+      const dias = Math.ceil((ve.fechaVencimiento.getTime() - hoy.getTime()) / 86400000)
+      const umbral = ve.diasAlerta ?? ve.tipoDocumento.diasAlertaDefault
+      return { ...ve, dias, alerta: dias <= umbral }
+    })
+    const alertaDoc = vencimientosConDias.some((ve) => ve.alerta)
     const enUso = v.solicitudes.some((s) => s.estado === "EN_CURSO")
 
-    return { ...v, diasSOAP, diasRevTecnica, diasPermiso, alertaDoc, enUso }
+    return { ...v, vencimientos: vencimientosConDias, alertaDoc, enUso }
   })
 
   return NextResponse.json(data)
@@ -45,8 +39,7 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return auth.response
 
   const body = await req.json()
-  const { patente, marca, modelo, anio, tipo, kmActual, vencimientoSOAP,
-    vencimientoRevTecnica, vencimientoPermiso, observaciones } = body
+  const { patente, marca, modelo, anio, tipo, kmActual, licenciasPermitidas, observaciones } = body
 
   if (!patente || !marca || !modelo || !anio || !tipo) {
     return NextResponse.json({ error: "Faltan campos obligatorios" }, { status: 400 })
@@ -60,9 +53,7 @@ export async function POST(req: NextRequest) {
       anio: parseInt(anio),
       tipo,
       kmActual: kmActual ? parseInt(kmActual) : 0,
-      vencimientoSOAP: vencimientoSOAP ? new Date(vencimientoSOAP) : null,
-      vencimientoRevTecnica: vencimientoRevTecnica ? new Date(vencimientoRevTecnica) : null,
-      vencimientoPermiso: vencimientoPermiso ? new Date(vencimientoPermiso) : null,
+      licenciasPermitidas: Array.isArray(licenciasPermitidas) ? licenciasPermitidas : [],
       observaciones: observaciones || null,
     },
   })

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireRole } from "@/lib/apiAuth"
+import { requireRole, denyIfNotOwner } from "@/lib/apiAuth"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
@@ -14,6 +14,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     include: { bitacora: true },
   })
   if (!solicitud) return NextResponse.json({ error: "No encontrado" }, { status: 404 })
+
+  const deny = denyIfNotOwner(auth, solicitud.creadoPorId)
+  if (deny) return deny
+
   if (solicitud.estado !== "EN_CURSO") {
     return NextResponse.json({ error: "Solo se puede cerrar una solicitud en curso" }, { status: 400 })
   }

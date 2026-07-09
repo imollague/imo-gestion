@@ -14,9 +14,7 @@ interface Vehiculo {
   tipo: string
   estado: string
   kmActual: number
-  vencimientoSOAP: string | null
-  vencimientoRevTecnica: string | null
-  vencimientoPermiso: string | null
+  vencimientos: { id: number; fechaVencimiento: string; diasAlerta: number | null; tipoDocumento: { nombre: string; diasAlertaDefault: number } }[]
   observaciones: string | null
   imagenUrl: string | null
   hojaVida: { id: number; tipo: string; descripcion: string; fecha: string; usuario: { name: string } }[]
@@ -37,6 +35,183 @@ const TIPO_HOJA: Record<string, string> = {
   CORRECCION: "✏️",
   ALERTA: "⚠️",
   DOCUMENTO: "📄",
+  CHECKLIST: "📋",
+  OBSERVACION: "⚠️",
+}
+
+interface ObservacionNota { id: number; texto: string; fecha: string; autor: { name: string } }
+interface ObservacionArchivo { id: number; nombre: string; url: string; fecha: string; subidoPor: { name: string } }
+interface Observacion {
+  id: number
+  origen: string
+  descripcion: string
+  estado: string
+  fecha: string
+  creadoPor: { name: string } | null
+  cerradoPor: { name: string } | null
+  fechaCierre: string | null
+  notas: ObservacionNota[]
+  archivos: ObservacionArchivo[]
+}
+
+function ObservacionCard({ obs, puedeGestionar, onChange }: {
+  obs: Observacion
+  puedeGestionar: boolean
+  onChange: () => void
+}) {
+  const [notaTexto, setNotaTexto] = useState("")
+  const [mostrarForm, setMostrarForm] = useState(false)
+
+  const cambiarEstado = async (estado: string) => {
+    await fetch(`/api/flota/observaciones/${obs.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ estado }),
+    })
+    onChange()
+  }
+
+  const agregarNota = async () => {
+    if (!notaTexto.trim()) return
+    await fetch(`/api/flota/observaciones/${obs.id}/notas`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ texto: notaTexto }),
+    })
+    setNotaTexto("")
+    onChange()
+  }
+
+  const adjuntarArchivo = async (file: File) => {
+    const fd = new FormData()
+    fd.append("archivo", file)
+    await fetch(`/api/flota/observaciones/${obs.id}/archivos`, { method: "POST", body: fd })
+    onChange()
+  }
+
+  return (
+    <div className={`rounded-lg p-4 border ${obs.estado === "ABIERTA" ? "bg-red-50 border-red-200" : "bg-gray-50 border-gray-200"}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-sm text-gray-800">{obs.descripcion}</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {fmtFecha(obs.fecha)}{obs.creadoPor ? ` · ${obs.creadoPor.name}` : ""} · {obs.origen === "CHECKLIST" ? "Checklist" : "Manual"}
+          </p>
+        </div>
+        <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${obs.estado === "ABIERTA" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
+          {obs.estado === "ABIERTA" ? "Abierta" : "Cerrada"}
+        </span>
+      </div>
+
+      {(obs.notas.length > 0 || obs.archivos.length > 0) && (
+        <div className="mt-3 space-y-1.5 border-t pt-2">
+          {obs.notas.map((n) => (
+            <p key={n.id} className="text-xs text-gray-600">📝 {n.texto} <span className="text-gray-400">— {n.autor.name}, {fmtFecha(n.fecha)}</span></p>
+          ))}
+          {obs.archivos.map((a) => (
+            <p key={a.id} className="text-xs">
+              📎 <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{a.nombre}</a>
+              <span className="text-gray-400"> — {a.subidoPor.name}, {fmtFecha(a.fecha)}</span>
+            </p>
+          ))}
+        </div>
+      )}
+
+      {puedeGestionar && (
+        <div className="mt-3 border-t pt-3">
+          {mostrarForm && (
+            <div className="flex gap-2 mb-2">
+              <input value={notaTexto} onChange={(e) => setNotaTexto(e.target.value)}
+                placeholder="Agregar nota..."
+                className="flex-1 border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-300" />
+              <button onClick={agregarNota} className="bg-gray-700 text-white px-3 py-1.5 rounded-lg text-xs hover:bg-gray-800">Guardar</button>
+            </div>
+          )}
+          <div className="flex gap-3 text-xs">
+            <button onClick={() => cambiarEstado(obs.estado === "ABIERTA" ? "CERRADA" : "ABIERTA")}
+              className="text-blue-600 hover:underline">
+              {obs.estado === "ABIERTA" ? "Cerrar" : "Reabrir"}
+            </button>
+            <button onClick={() => setMostrarForm((m) => !m)} className="text-gray-500 hover:underline">Adjuntar nota</button>
+            <label className="text-gray-500 hover:underline cursor-pointer">
+              Adjuntar archivo
+              <input type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) adjuntarArchivo(f); e.target.value = "" }} />
+            </label>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ObservacionesPanel({ vehiculoId, puedeGestionar }: { vehiculoId: number; puedeGestionar: boolean }) {
+  const [observaciones, setObservaciones] = useState<Observacion[]>([])
+  const [cargando, setCargando] = useState(true)
+  const [mostrarCerradas, setMostrarCerradas] = useState(false)
+  const [nuevaDesc, setNuevaDesc] = useState("")
+
+  const cargar = useCallback(() => {
+    fetch(`/api/flota/vehiculos/${vehiculoId}/observaciones`)
+      .then((r) => r.json())
+      .then((d) => { setObservaciones(d); setCargando(false) })
+  }, [vehiculoId])
+
+  useEffect(() => { cargar() }, [cargar])
+
+  const crearManual = async () => {
+    if (!nuevaDesc.trim()) return
+    await fetch(`/api/flota/vehiculos/${vehiculoId}/observaciones`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ descripcion: nuevaDesc }),
+    })
+    setNuevaDesc("")
+    cargar()
+  }
+
+  const abiertas = observaciones.filter((o) => o.estado === "ABIERTA")
+  const cerradas = observaciones.filter((o) => o.estado === "CERRADA")
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm p-5">
+      <p className="font-medium text-gray-700 mb-3">Observaciones</p>
+      {cargando ? (
+        <p className="text-sm text-gray-400">Cargando...</p>
+      ) : (
+        <>
+          {abiertas.length === 0 ? (
+            <p className="text-sm text-gray-400 mb-3">Sin observaciones abiertas</p>
+          ) : (
+            <div className="space-y-2 mb-3">
+              {abiertas.map((o) => <ObservacionCard key={o.id} obs={o} puedeGestionar={puedeGestionar} onChange={cargar} />)}
+            </div>
+          )}
+
+          {cerradas.length > 0 && (
+            <div className="mb-3">
+              <button onClick={() => setMostrarCerradas((m) => !m)} className="text-xs text-gray-400 hover:underline">
+                {mostrarCerradas ? "Ocultar" : "Ver"} {cerradas.length} cerrada{cerradas.length > 1 ? "s" : ""}
+              </button>
+              {mostrarCerradas && (
+                <div className="space-y-2 mt-2">
+                  {cerradas.map((o) => <ObservacionCard key={o.id} obs={o} puedeGestionar={puedeGestionar} onChange={cargar} />)}
+                </div>
+              )}
+            </div>
+          )}
+
+          {puedeGestionar && (
+            <div className="border-t pt-3 flex gap-2">
+              <input value={nuevaDesc} onChange={(e) => setNuevaDesc(e.target.value)}
+                placeholder="Registrar observación manual..."
+                className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+              <button onClick={crearManual} className="bg-gray-700 text-white px-3 py-2 rounded-lg text-sm hover:bg-gray-800">+ Agregar</button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
 }
 
 const TIPOS_DOC = [
@@ -108,15 +283,14 @@ function SubirDocumento({ vehiculoId, onSubido }: { vehiculoId: number; onSubido
   )
 }
 
-function DocVencimiento({ label, fecha }: { label: string; fecha: string | null }) {
-  if (!fecha) return <div className="text-sm text-gray-400">{label}: no registrado</div>
+function DocVencimiento({ label, fecha, umbral }: { label: string; fecha: string; umbral: number }) {
   const dias = Math.ceil((new Date(fecha).getTime() - Date.now()) / 86400000)
-  const color = dias < 0 ? "text-red-600 font-semibold" : dias <= 15 ? "text-red-500" : dias <= 30 ? "text-yellow-600" : "text-green-600"
+  const color = dias < 0 ? "text-red-600 font-semibold" : dias <= umbral ? "text-yellow-600" : "text-green-600"
   return (
     <div className="flex justify-between text-sm">
       <span className="text-gray-600">{label}</span>
       <span className={color}>
-        {fmtFecha(fecha)} {dias < 0 ? "(VENCIDO)" : dias <= 30 ? `(${dias} días)` : "✓"}
+        {fmtFecha(fecha)} {dias < 0 ? "(VENCIDO)" : dias <= umbral ? `(${dias} días)` : "✓"}
       </span>
     </div>
   )
@@ -231,11 +405,20 @@ export default function VehiculoDetallePage() {
           {/* Documentación */}
           <div className="bg-white rounded-xl shadow-sm p-5">
             <p className="font-medium text-gray-700 mb-3">Documentación</p>
-            <div className="space-y-2">
-              <DocVencimiento label="SOAP" fecha={vehiculo.vencimientoSOAP} />
-              <DocVencimiento label="Revisión técnica" fecha={vehiculo.vencimientoRevTecnica} />
-              <DocVencimiento label="Permiso circulación" fecha={vehiculo.vencimientoPermiso} />
-            </div>
+            {vehiculo.vencimientos.length === 0 ? (
+              <p className="text-sm text-gray-400">Sin vencimientos registrados</p>
+            ) : (
+              <div className="space-y-2">
+                {vehiculo.vencimientos.map((ve) => (
+                  <DocVencimiento
+                    key={ve.id}
+                    label={ve.tipoDocumento.nombre}
+                    fecha={ve.fechaVencimiento}
+                    umbral={ve.diasAlerta ?? ve.tipoDocumento.diasAlertaDefault}
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Archivos adjuntos */}
@@ -314,6 +497,9 @@ export default function VehiculoDetallePage() {
               </div>
             )}
           </div>
+
+          {/* Observaciones */}
+          <ObservacionesPanel vehiculoId={vehiculo.id} puedeGestionar={role === "ADMIN" || role === "ENCARGADO"} />
 
           {/* Hoja de vida */}
           <div className="bg-white rounded-xl shadow-sm p-5">

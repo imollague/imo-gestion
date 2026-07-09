@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import Layout from "@/components/Layout"
 
+interface VencimientoDoc {
+  dias: number
+  alerta: boolean
+  tipoDocumento: { nombre: string }
+}
+
 interface Vehiculo {
   id: number
   patente: string
@@ -14,11 +20,20 @@ interface Vehiculo {
   tipo: string
   estado: string
   kmActual: number
-  diasSOAP: number | null
-  diasRevTecnica: number | null
-  diasPermiso: number | null
+  vencimientos: VencimientoDoc[]
   alertaDoc: boolean
   enUso: boolean
+}
+
+const TIPO_LABEL: Record<string, string> = {
+  CAMIONETA: "Camioneta",
+  SEDAN: "Sedán",
+  CAMION: "Camión",
+  CAMION_LIVIANO: "Camión",
+  CAMION_PESADO: "Camión",
+  MAQUINARIA: "Maquinaria",
+  BUS: "Bus / Minibus",
+  OTRO: "Otro",
 }
 
 const ESTADO_LABEL: Record<string, string> = {
@@ -35,8 +50,7 @@ const ESTADO_COLOR: Record<string, string> = {
   DADO_DE_BAJA: "bg-gray-100 text-gray-500",
 }
 
-function BadgeDias({ dias, label }: { dias: number | null; label: string }) {
-  if (dias === null) return null
+function BadgeDias({ dias, label }: { dias: number; label: string }) {
   const color = dias < 0 ? "text-red-600 font-semibold" : dias <= 15 ? "text-red-500" : dias <= 30 ? "text-yellow-600" : "text-gray-400"
   const texto = dias < 0 ? `${label}: VENCIDO` : `${label}: ${dias}d`
   return <span className={`text-xs ${color}`}>{texto}</span>
@@ -105,9 +119,9 @@ export default function FlotaPage() {
               <span className="font-medium text-red-700">{v.patente}</span>
               <span className="text-red-600 text-sm">{v.marca} {v.modelo}</span>
               <div className="flex gap-3 ml-auto">
-                <BadgeDias dias={v.diasSOAP} label="SOAP" />
-                <BadgeDias dias={v.diasRevTecnica} label="Rev. Técnica" />
-                <BadgeDias dias={v.diasPermiso} label="Permiso" />
+                {v.vencimientos.filter((ve) => ve.alerta).map((ve, i) => (
+                  <BadgeDias key={i} dias={ve.dias} label={ve.tipoDocumento.nombre} />
+                ))}
               </div>
             </div>
           ))}
@@ -128,7 +142,7 @@ export default function FlotaPage() {
             href="/flota/solicitudes"
             className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
           >
-            Mis solicitudes
+            {(role === "ADMIN" || role === "ENCARGADO") ? "Solicitudes" : "Mis solicitudes"}
           </a>
           {(role === "ADMIN" || role === "ENCARGADO") && (
             <a
@@ -142,7 +156,7 @@ export default function FlotaPage() {
       </div>
 
       {/* Tabla */}
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm overflow-scroll">
         {cargando ? (
           <div className="p-12 text-center text-gray-400">Cargando vehículos...</div>
         ) : filtrados.length === 0 ? (
@@ -168,7 +182,7 @@ export default function FlotaPage() {
                 >
                   <td className="px-4 py-3 font-mono font-semibold text-gray-800">{v.patente}</td>
                   <td className="px-4 py-3 text-gray-700">{v.marca} {v.modelo} <span className="text-gray-400">{v.anio}</span></td>
-                  <td className="px-4 py-3 text-gray-500 capitalize">{v.tipo.replace(/_/g, " ").toLowerCase()}</td>
+                  <td className="px-4 py-3 text-gray-500 capitalize">{TIPO_LABEL[v.tipo] ?? v.tipo}</td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${ESTADO_COLOR[v.estado]}`}>
                       {v.enUso ? "En uso" : ESTADO_LABEL[v.estado]}
@@ -178,9 +192,9 @@ export default function FlotaPage() {
                   <td className="px-4 py-3">
                     {v.alertaDoc ? (
                       <div className="flex flex-col gap-0.5">
-                        <BadgeDias dias={v.diasSOAP} label="SOAP" />
-                        <BadgeDias dias={v.diasRevTecnica} label="Rev. Téc." />
-                        <BadgeDias dias={v.diasPermiso} label="Permiso" />
+                        {v.vencimientos.filter((ve) => ve.alerta).map((ve, i) => (
+                          <BadgeDias key={i} dias={ve.dias} label={ve.tipoDocumento.nombre} />
+                        ))}
                       </div>
                     ) : (
                       <span className="text-green-500 text-xs">✓ Al día</span>

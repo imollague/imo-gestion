@@ -12,6 +12,20 @@ interface PasajeroViaje { id: number; nombre: string; rut: string | null }
 interface ParadaViaje { id: number; km: number; descripcion: string | null; litros: number | null; comprobanteRef: string | null; fecha: string; pasajeros: PasajeroViaje[] }
 interface FotoRevision { id: number; tipo: string; url: string }
 interface PasajeroForm { nombre: string; rut: string }
+interface ObsNota { id: number; texto: string; fecha: string; autor: { name: string } }
+interface ObsArchivo { id: number; nombre: string; url: string; fecha: string; subidoPor: { name: string } }
+interface ObservacionSolicitud {
+  id: number
+  descripcion: string
+  origen: string
+  estado: string
+  fecha: string
+  creadoPor: { name: string } | null
+  cerradoPor: { name: string } | null
+  fechaCierre: string | null
+  notas: ObsNota[]
+  archivos: ObsArchivo[]
+}
 
 interface Solicitud {
   id: number
@@ -22,7 +36,7 @@ interface Solicitud {
   fechaSolicitud: string
   fechaCierre: string | null
   motivoRechazo: string | null
-  vehiculo: { id: number; patente: string; marca: string; modelo: string; tipo: string; imagenUrl: string | null }
+  vehiculo: { id: number; patente: string; marca: string; modelo: string; tipo: string; imagenUrl: string | null; kmActual: number }
   creadoPor: { id: number; name: string }
   aprobadoPor: { name: string } | null
   cerradoPor: { name: string } | null
@@ -31,20 +45,19 @@ interface Solicitud {
   bitacora: { id: number; kmSalida: number; kmLlegada: number | null; horaRetornoReal: string | null; observacion: string | null; paradas: ParadaViaje[] } | null
   hojaVida: { id: number; tipo: string; descripcion: string; fecha: string; usuario: { name: string } }[]
   fotosRevision: FotoRevision[]
+  observacionesSolicitud: ObservacionSolicitud[]
 }
 
-// Nuevo flujo: checklist + OS disponibles desde PENDIENTE, encargado autoriza OS
+// Flujo v3: solicitud + OS se crean juntas → encargado autoriza → checklist+fotos → salida → viaje → cierre
 function getPaso(s: Solicitud): number {
   if (s.estado === "RECHAZADA") return 0
-  if (s.estado === "PENDIENTE") {
-    if (!s.checklist) return 1          // conductor: completar checklist
-    if (!s.ordenServicio) return 2      // conductor: generar OS
-    if (!s.ordenServicio.firmada) return 3  // encargado: autorizar OS
-    return 3
+  if (s.estado === "PENDIENTE") return 1   // encargado: autorizar OS
+  if (s.estado === "APROBADA") {
+    if (!s.checklist) return 2             // conductor: checklist + fotos
+    return 3                               // conductor: registrar km salida
   }
-  if (s.estado === "APROBADA") return 4   // conductor: registrar km salida
-  if (s.estado === "EN_CURSO") return 5   // conductor: paradas + llegada
-  if (s.estado === "CERRADA") return 6
+  if (s.estado === "EN_CURSO") return 4    // conductor: paradas + llegada
+  if (s.estado === "CERRADA") return 5
   return 0
 }
 
@@ -110,6 +123,134 @@ function generarPDFOrden(s: Solicitud) {
   doc.text("Firma Conductor", 210 - margen - 70, y)
 
   doc.save(`OS-${s.id}-${s.vehiculo.patente}.pdf`)
+}
+
+// ─── Panel de observaciones (ENCARGADO/ADMIN) ─────────
+
+function ObservacionCard({ obs, onRefresh }: { obs: ObservacionSolicitud; onRefresh: () => void }) {
+  const [notaTexto, setNotaTexto] = useState("")
+  const [subiendoNota, setSubiendoNota] = useState(false)
+  const [mostrarNota, setMostrarNota] = useState(false)
+  const [archivoCargando, setArchivoCargando] = useState(false)
+  const archivoRef = useRef<HTMLInputElement>(null)
+
+  const cerrarReabrir = async () => {
+    const nuevoEstado = obs.estado === "ABIERTA" ? "CERRADA" : "ABIERTA"
+    await fetch(`/api/flota/observaciones/${obs.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ estado: nuevoEstado }),
+    })
+    onRefresh()
+  }
+
+  const guardarNota = async () => {
+    if (!notaTexto.trim()) return
+    setSubiendoNota(true)
+    await fetch(`/api/flota/observaciones/${obs.id}/notas`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ texto: notaTexto }),
+    })
+    setSubiendoNota(false)
+    setNotaTexto("")
+    setMostrarNota(false)
+    onRefresh()
+  }
+
+  const subirArchivo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setArchivoCargando(true)
+    const fd = new FormData()
+    fd.append("archivo", file)
+    await fetch(`/api/flota/observaciones/${obs.id}/archivos`, { method: "POST", body: fd })
+    setArchivoCargando(false)
+    if (archivoRef.current) archivoRef.current.value = ""
+    onRefresh()
+  }
+
+  const abierta = obs.estado === "ABIERTA"
+
+  return (
+    <div className={`border rounded-lg p-4 ${abierta ? "border-orange-200 bg-orange-50" : "border-gray-200 bg-gray-50"}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${abierta ? "bg-orange-200 text-orange-800" : "bg-gray-200 text-gray-600"}`}>
+              {abierta ? "Abierta" : "Cerrada"}
+            </span>
+            <span className="text-xs text-gray-500">
+            {obs.origen === "CHECKLIST" ? "Checklist" : obs.origen === "VIAJE" ? "Al finalizar viaje" : "Manual"}
+          </span>
+          </div>
+          <p className="text-sm font-medium text-gray-800">{obs.descripcion}</p>
+          <p className="text-xs text-gray-500 mt-1">
+            {fmtFecha(obs.fecha)}{obs.creadoPor ? ` · ${obs.creadoPor.name}` : ""}
+          </p>
+          {!abierta && obs.cerradoPor && (
+            <p className="text-xs text-gray-400 mt-0.5">
+              Cerrada el {obs.fechaCierre ? fmtFecha(obs.fechaCierre) : "—"} por {obs.cerradoPor.name}
+            </p>
+          )}
+        </div>
+        <button onClick={cerrarReabrir}
+          className={`shrink-0 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${abierta ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-orange-100 text-orange-700 hover:bg-orange-200"}`}>
+          {abierta ? "Cerrar" : "Reabrir"}
+        </button>
+      </div>
+
+      {obs.notas.length > 0 && (
+        <div className="mt-3 space-y-2 border-t border-gray-200 pt-3">
+          {obs.notas.map((n) => (
+            <div key={n.id} className="text-xs bg-white rounded p-2.5 border border-gray-100">
+              <p className="text-gray-700 whitespace-pre-wrap">{n.texto}</p>
+              <p className="text-gray-400 mt-1">{n.autor.name} · {fmtFecha(n.fecha)}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {obs.archivos.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {obs.archivos.map((a) => (
+            <a key={a.id} href={a.url} target="_blank" rel="noopener noreferrer"
+              className="text-xs text-blue-600 hover:underline flex items-center gap-1 bg-white border border-blue-100 rounded px-2 py-1">
+              📎 {a.nombre}
+            </a>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-3 border-t border-gray-200 pt-3">
+        {mostrarNota ? (
+          <div className="space-y-2">
+            <textarea value={notaTexto} onChange={(e) => setNotaTexto(e.target.value)}
+              rows={2} placeholder="Descripción de la acción tomada..."
+              className="w-full border rounded px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-300" />
+            <div className="flex gap-2">
+              <button onClick={guardarNota} disabled={subiendoNota || !notaTexto.trim()}
+                className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 disabled:opacity-50">
+                {subiendoNota ? "Guardando..." : "Guardar nota"}
+              </button>
+              <button onClick={() => { setMostrarNota(false); setNotaTexto("") }}
+                className="text-xs text-gray-500 hover:text-gray-700">Cancelar</button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex gap-4">
+            <button onClick={() => setMostrarNota(true)}
+              className="text-xs text-blue-600 hover:underline">+ Agregar nota</button>
+            <button onClick={() => archivoRef.current?.click()} disabled={archivoCargando}
+              className="text-xs text-blue-600 hover:underline disabled:opacity-50">
+              {archivoCargando ? "Subiendo..." : "📎 Adjuntar archivo"}
+            </button>
+            <input ref={archivoRef} type="file" className="hidden" onChange={subirArchivo} />
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 // ─── Componentes de cada paso ────────────────────────
@@ -302,7 +443,7 @@ function PasoChecklist({ solicitudId, vehiculo, fotosIniciales, onDone }: {
       .then((d) => {
         setItems(d)
         const init: Record<number, ChecklistRespuesta> = {}
-        d.forEach((i: ChecklistItem) => { init[i.id] = { itemId: i.id, valor: "", observacion: "" } })
+        d.forEach((i: ChecklistItem) => { init[i.id] = { itemId: i.id, valor: "OK", observacion: "" } })
         setRespuestas(init)
       })
   }, [])
@@ -340,7 +481,7 @@ function PasoChecklist({ solicitudId, vehiculo, fotosIniciales, onDone }: {
           className="w-full max-h-48 object-cover rounded-xl"
         />
       )}
-      <p className="text-gray-600">Revisa el vehículo y completa el checklist antes de salir.</p>
+      <p className="text-gray-600">Revisa el vehículo. Todos los ítems parten en OK — solo cambia los que detectes con problemas.</p>
       {categorias.map((cat) => (
         <div key={cat}>
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">{cat}</p>
@@ -393,62 +534,13 @@ function PasoChecklist({ solicitudId, vehiculo, fotosIniciales, onDone }: {
   )
 }
 
-function PasoOrden({ solicitudId, onDone }: { solicitudId: number; onDone: () => void }) {
-  const [form, setForm] = useState({ horaSalidaEst: "", horaRetornoEst: "", folioFedoks: "" })
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
-
-  const handleSubmit = async () => {
-    if (!form.horaSalidaEst) { setError("La hora de salida es obligatoria"); return }
-    setLoading(true)
-    const res = await fetch(`/api/flota/solicitudes/${solicitudId}/orden`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    })
-    setLoading(false)
-    if (!res.ok) { const d = await res.json(); setError(d.error); return }
-    onDone()
-  }
-
-  return (
-    <div className="space-y-5">
-      <p className="text-gray-600">Completa los datos de la orden de servicio.</p>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Hora de salida estimada *</label>
-        <input type="datetime-local" value={form.horaSalidaEst}
-          onChange={(e) => setForm((f) => ({ ...f, horaSalidaEst: e.target.value }))}
-          className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Hora de retorno estimada</label>
-        <input type="datetime-local" value={form.horaRetornoEst}
-          onChange={(e) => setForm((f) => ({ ...f, horaRetornoEst: e.target.value }))}
-          className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Folio FEDOKS (opcional)</label>
-        <input value={form.folioFedoks}
-          onChange={(e) => setForm((f) => ({ ...f, folioFedoks: e.target.value }))}
-          placeholder="Ej: EXP-2026-001"
-          className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
-        <p className="text-xs text-gray-400 mt-1">Si subes la OS a FEDOKS, ingresa el folio aquí para trazabilidad.</p>
-      </div>
-      {error && <p className="text-red-600 text-sm">{error}</p>}
-      <button onClick={handleSubmit} disabled={loading}
-        className="w-full bg-blue-600 text-white py-3.5 rounded-xl text-base font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors">
-        {loading ? "Guardando..." : "Generar Orden de Servicio"}
-      </button>
-    </div>
-  )
-}
-
-function PasoBitacora({ solicitudId, bitacora, onDone }: {
+function PasoBitacora({ solicitudId, bitacora, kmActualVehiculo, onDone }: {
   solicitudId: number
   bitacora: Solicitud["bitacora"]
+  kmActualVehiculo: number
   onDone: () => void
 }) {
-  const [kmSalida, setKmSalida] = useState("")
+  const [kmSalida, setKmSalida] = useState(String(kmActualVehiculo))
   const [kmLlegada, setKmLlegada] = useState("")
   const [horaRetorno, setHoraRetorno] = useState("")
   const [observacion, setObservacion] = useState("")
@@ -521,9 +613,9 @@ function PasoBitacora({ solicitudId, bitacora, onDone }: {
           <input
             type="number" inputMode="numeric" value={kmSalida}
             onChange={(e) => setKmSalida(e.target.value)}
-            placeholder="Ej: 45230"
             className="w-full border rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
           />
+          <p className="text-xs text-gray-400 mt-1">Sugerido a partir del último kilometraje registrado — corrígelo si es necesario.</p>
         </div>
         {error && <p className="text-red-600 text-sm">{error}</p>}
         <button onClick={registrarSalida} disabled={loading}
@@ -688,6 +780,7 @@ export default function SolicitudDetallePage() {
   const { id } = useParams<{ id: string }>()
   const [solicitud, setSolicitud] = useState<Solicitud | null>(null)
   const [cargando, setCargando] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [motivoRechazo, setMotivoRechazo] = useState("")
   const [loadingAction, setLoadingAction] = useState(false)
 
@@ -699,9 +792,11 @@ export default function SolicitudDetallePage() {
     if (!session) return
     fetch(`/api/flota/solicitudes/${id}`)
       .then((r) => { if (!r.ok) throw new Error(); return r.json() })
-      .then((d) => { setSolicitud(d); setCargando(false) })
-      .catch(() => { setCargando(false) })
+      .then((d) => { setSolicitud(d); setCargando(false); setRefreshing(false) })
+      .catch(() => { setCargando(false); setRefreshing(false) })
   }, [session, id])
+
+  const handleRefresh = () => { setRefreshing(true); cargar() }
 
   useEffect(() => { cargar() }, [cargar])
 
@@ -731,28 +826,24 @@ export default function SolicitudDetallePage() {
 
   const paso = getPaso(solicitud)
 
-  // Stepper visual — 5 bloques
+  // Stepper visual — 5 bloques, alineado 1:1 con getPaso()
   const VISUAL = [
-    { label: "Checklist" },
     { label: "Orden de Servicio" },
-    { label: "Pre-salida" },
+    { label: "Checklist" },
+    { label: "Salida" },
     { label: "En viaje" },
     { label: "Cierre" },
   ]
 
-  const pasoVisual = solicitud.estado === "RECHAZADA" ? -1
-    : paso === 1 ? 0
-    : paso <= 3 ? 1
-    : paso === 4 ? 2
-    : paso === 5 ? 3
-    : 4
+  const pasoVisual = solicitud.estado === "RECHAZADA" ? -1 : paso - 1
 
   return (
     <Layout titulo={`Solicitud #${solicitud.id} — ${solicitud.vehiculo.patente}`}>
 
       {/* Stepper */}
       {solicitud.estado !== "RECHAZADA" && (
-        <div className="flex items-center mb-8 overflow-x-auto pb-2">
+        <div className="flex items-center gap-4 mb-8">
+        <div className="flex items-center overflow-x-auto pb-2 flex-1">
           {VISUAL.map((v, i) => {
             const activo = i === pasoVisual
             const completo = i < pasoVisual
@@ -767,6 +858,14 @@ export default function SolicitudDetallePage() {
               </div>
             )
           })}
+        </div>
+        {solicitud.estado !== "CERRADA" && (
+          <button onClick={handleRefresh} disabled={refreshing}
+            className="shrink-0 flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 disabled:opacity-50 transition-colors">
+            <span className={refreshing ? "animate-spin inline-block" : ""}>🔄</span>
+            {refreshing ? "Actualizando..." : "Actualizar"}
+          </button>
+        )}
         </div>
       )}
 
@@ -843,39 +942,8 @@ export default function SolicitudDetallePage() {
               </div>
             )}
 
-            {/* PASO 1: Checklist (conductor, inmediatamente tras crear) */}
+            {/* PASO 1: Encargado/Admin autoriza la OS creada junto con la solicitud */}
             {paso === 1 && (
-              role === "ENCARGADO" ? (
-                <div className="text-center py-10">
-                  <p className="text-4xl mb-3">⏳</p>
-                  <p className="text-xl font-semibold text-gray-700">Esperando al conductor</p>
-                  <p className="text-gray-400 mt-2">El conductor debe completar el checklist antes de continuar.</p>
-                </div>
-              ) : (
-                <PasoChecklist
-                  solicitudId={solicitud.id}
-                  vehiculo={solicitud.vehiculo}
-                  fotosIniciales={solicitud.fotosRevision}
-                  onDone={cargar}
-                />
-              )
-            )}
-
-            {/* PASO 2: Generar OS (conductor) */}
-            {paso === 2 && (
-              role === "ENCARGADO" ? (
-                <div className="text-center py-10">
-                  <p className="text-4xl mb-3">⏳</p>
-                  <p className="text-xl font-semibold text-gray-700">Esperando al conductor</p>
-                  <p className="text-gray-400 mt-2">El conductor debe generar la Orden de Servicio antes de continuar.</p>
-                </div>
-              ) : (
-                <PasoOrden solicitudId={solicitud.id} onDone={cargar} />
-              )
-            )}
-
-            {/* PASO 3: Encargado/Admin autoriza OS */}
-            {paso === 3 && (
               <div>
                 {(role === "ADMIN" || role === "ENCARGADO") ? (
                   <div className="space-y-4">
@@ -925,16 +993,58 @@ export default function SolicitudDetallePage() {
               </div>
             )}
 
-            {/* PASO 4: Registrar km salida (OS autorizada) */}
-            {paso === 4 && <PasoBitacora solicitudId={solicitud.id} bitacora={null} onDone={cargar} />}
-
-            {/* PASO 5: En viaje — paradas + km llegada + cierre automático */}
-            {paso === 5 && solicitud.bitacora && (
-              <PasoBitacora solicitudId={solicitud.id} bitacora={solicitud.bitacora} onDone={cargar} />
+            {/* PASO 2: Checklist + fotos (conductor, tras autorizar la OS) */}
+            {paso === 2 && (
+              (role === "ENCARGADO" || role === "ADMIN") ? (
+                <div className="text-center py-10">
+                  <p className="text-4xl mb-3">⏳</p>
+                  <p className="text-xl font-semibold text-gray-700">Esperando al conductor</p>
+                  <p className="text-gray-400 mt-2">El conductor debe completar el checklist antes de continuar.</p>
+                </div>
+              ) : (
+                <PasoChecklist
+                  solicitudId={solicitud.id}
+                  vehiculo={solicitud.vehiculo}
+                  fotosIniciales={solicitud.fotosRevision}
+                  onDone={cargar}
+                />
+              )
             )}
 
-            {/* PASO 6: Cerrada */}
-            {paso === 6 && (
+            {/* PASO 3: Registrar km salida — solo el conductor */}
+            {paso === 3 && (
+              (role === "ENCARGADO" || role === "ADMIN") ? (
+                <div className="text-center py-10">
+                  <p className="text-4xl mb-3">⏳</p>
+                  <p className="text-xl font-semibold text-gray-700">Esperando al conductor</p>
+                  <p className="text-gray-400 mt-2">El conductor debe registrar el kilometraje de salida.</p>
+                </div>
+              ) : (
+                <PasoBitacora solicitudId={solicitud.id} bitacora={null} kmActualVehiculo={solicitud.vehiculo.kmActual} onDone={cargar} />
+              )
+            )}
+
+            {/* PASO 4: En viaje — solo el conductor puede agregar paradas y registrar llegada */}
+            {paso === 4 && solicitud.bitacora && (
+              (role === "ENCARGADO" || role === "ADMIN") ? (
+                <div className="text-center py-10">
+                  <p className="text-4xl mb-3">🚗</p>
+                  <p className="text-xl font-semibold text-gray-700">Vehículo en viaje</p>
+                  <p className="text-gray-400 mt-2">
+                    {solicitud.conductorNombre} está en ruta hacia {solicitud.destino}.
+                  </p>
+                  <p className="text-gray-400 mt-1 text-sm">
+                    Salida: {solicitud.bitacora.kmSalida.toLocaleString()} km
+                    {solicitud.bitacora.paradas.length > 0 && ` · ${solicitud.bitacora.paradas.length} parada(s)`}
+                  </p>
+                </div>
+              ) : (
+                <PasoBitacora solicitudId={solicitud.id} bitacora={solicitud.bitacora} kmActualVehiculo={solicitud.vehiculo.kmActual} onDone={cargar} />
+              )
+            )}
+
+            {/* PASO 5: Cerrada */}
+            {paso === 5 && (
               <div className="text-center py-8">
                 <p className="text-4xl mb-3">🔒</p>
                 <p className="text-xl font-semibold text-gray-700">Proceso cerrado</p>
@@ -963,6 +1073,25 @@ export default function SolicitudDetallePage() {
           </div>
         </div>
       </div>
+
+      {/* Panel observaciones — solo ENCARGADO/ADMIN, cuando hay contenido */}
+      {(role === "ADMIN" || role === "ENCARGADO") && solicitud.observacionesSolicitud.length > 0 && (
+        <div className="mt-6">
+          <div className="bg-white rounded-xl shadow-sm p-5">
+            <p className="text-xs text-gray-400 uppercase font-semibold mb-1">Observaciones del viaje</p>
+            {solicitud.observacionesSolicitud.filter(o => o.estado === "ABIERTA").length > 0 && (
+              <p className="text-sm text-orange-700 font-medium mb-4">
+                {solicitud.observacionesSolicitud.filter(o => o.estado === "ABIERTA").length} pendiente(s) de resolución
+              </p>
+            )}
+            <div className="space-y-3">
+              {solicitud.observacionesSolicitud.map((obs) => (
+                <ObservacionCard key={obs.id} obs={obs} onRefresh={cargar} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mt-4">
         <button onClick={() => router.back()} className="text-sm text-gray-500 hover:underline">
