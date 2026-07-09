@@ -1,7 +1,15 @@
 import { PrismaPg } from "@prisma/adapter-pg"
 import { PrismaClient } from "../generated/prisma/client"
+import { Pool } from "pg"
 
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! })
+// En Vercel (serverless) limitamos el pool a 1 conexión por instancia para no agotar
+// el límite del Transaction mode pooler de Supabase (puerto 6543).
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL!,
+  max: 1,
+})
+
+const adapter = new PrismaPg(pool)
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient }
 
