@@ -8,8 +8,7 @@ import { TIPOS_LICENCIA } from "@/lib/licencias"
 const TIPOS = [
   { value: "CAMIONETA", label: "Camioneta" },
   { value: "SEDAN", label: "Sedán" },
-  { value: "CAMION_LIVIANO", label: "Camión liviano" },
-  { value: "CAMION_PESADO", label: "Camión pesado" },
+  { value: "CAMION", label: "Camión" },
   { value: "MAQUINARIA", label: "Maquinaria" },
   { value: "BUS", label: "Bus / Minibus" },
   { value: "OTRO", label: "Otro" },

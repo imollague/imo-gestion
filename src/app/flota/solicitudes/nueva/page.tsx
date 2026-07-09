@@ -160,7 +160,19 @@ export default function NuevaSolicitudPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Conductor *</label>
-            {sinConductorRegistrado ? (
+            {session?.user?.conductorFlotaId ? (
+              // Usuario FLOTA con perfil vinculado — se llena automáticamente
+              conductor ? (
+                <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5">
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">{conductor.nombre}</p>
+                    <p className="text-xs text-gray-500">Licencia {conductor.tipoLicencia} · Tu perfil de conductor</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="border rounded-lg px-3 py-2.5 text-sm text-gray-400">Cargando perfil...</div>
+              )
+            ) : sinConductorRegistrado ? (
               <div>
                 <input
                   value={form.conductorNombre}
@@ -201,7 +213,7 @@ export default function NuevaSolicitudPage() {
                 <option value="">Seleccionar vehículo...</option>
                 {vehiculosDisponibles.map((v) => (
                   <option key={v.id} value={v.id}>
-                    {v.patente} — {v.marca} {v.modelo} ({v.tipo.replace(/_/g, " ").toLowerCase()})
+                    {v.patente} — {v.marca} {v.modelo}
                   </option>
                 ))}
               </select>

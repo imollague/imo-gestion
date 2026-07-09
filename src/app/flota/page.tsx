@@ -25,6 +25,17 @@ interface Vehiculo {
   enUso: boolean
 }
 
+const TIPO_LABEL: Record<string, string> = {
+  CAMIONETA: "Camioneta",
+  SEDAN: "Sedán",
+  CAMION: "Camión",
+  CAMION_LIVIANO: "Camión",
+  CAMION_PESADO: "Camión",
+  MAQUINARIA: "Maquinaria",
+  BUS: "Bus / Minibus",
+  OTRO: "Otro",
+}
+
 const ESTADO_LABEL: Record<string, string> = {
   OPERATIVO: "Operativo",
   EN_MANTENCION: "En mantención",
@@ -131,7 +142,7 @@ export default function FlotaPage() {
             href="/flota/solicitudes"
             className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
           >
-            Mis solicitudes
+            {(role === "ADMIN" || role === "ENCARGADO") ? "Solicitudes" : "Mis solicitudes"}
           </a>
           {(role === "ADMIN" || role === "ENCARGADO") && (
             <a
@@ -145,7 +156,7 @@ export default function FlotaPage() {
       </div>
 
       {/* Tabla */}
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm overflow-scroll">
         {cargando ? (
           <div className="p-12 text-center text-gray-400">Cargando vehículos...</div>
         ) : filtrados.length === 0 ? (
@@ -171,7 +182,7 @@ export default function FlotaPage() {
                 >
                   <td className="px-4 py-3 font-mono font-semibold text-gray-800">{v.patente}</td>
                   <td className="px-4 py-3 text-gray-700">{v.marca} {v.modelo} <span className="text-gray-400">{v.anio}</span></td>
-                  <td className="px-4 py-3 text-gray-500 capitalize">{v.tipo.replace(/_/g, " ").toLowerCase()}</td>
+                  <td className="px-4 py-3 text-gray-500 capitalize">{TIPO_LABEL[v.tipo] ?? v.tipo}</td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${ESTADO_COLOR[v.estado]}`}>
                       {v.enUso ? "En uso" : ESTADO_LABEL[v.estado]}

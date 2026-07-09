@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireRole } from "@/lib/apiAuth"
+import { requireRole, denyIfNotOwner } from "@/lib/apiAuth"
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
@@ -38,9 +38,22 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
         include: { usuario: { select: { name: true } } },
       },
       fotosRevision: { orderBy: { fecha: "asc" } },
+      observacionesSolicitud: {
+        orderBy: [{ estado: "asc" }, { fecha: "asc" }] as const,
+        include: {
+          creadoPor: { select: { name: true } },
+          cerradoPor: { select: { name: true } },
+          notas: { orderBy: { fecha: "asc" }, include: { autor: { select: { name: true } } } },
+          archivos: { orderBy: { fecha: "asc" }, include: { subidoPor: { select: { name: true } } } },
+        },
+      },
     },
   })
 
   if (!solicitud) return NextResponse.json({ error: "No encontrado" }, { status: 404 })
+
+  const deny = denyIfNotOwner(auth, solicitud.creadoPorId)
+  if (deny) return deny
+
   return NextResponse.json(solicitud)
 }

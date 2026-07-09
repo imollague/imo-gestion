@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireRole } from "@/lib/apiAuth"
+import { requireRole, denyIfNotOwner } from "@/lib/apiAuth"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
+  const auth = await requireRole("FLOTA")
   if (!auth.ok) return auth.response
 
   const { id } = await params
@@ -16,6 +16,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     include: { checklist: true },
   })
   if (!solicitud) return NextResponse.json({ error: "No encontrado" }, { status: 404 })
+
+  const deny = denyIfNotOwner(auth, solicitud.creadoPorId)
+  if (deny) return deny
+
   if (solicitud.estado !== "APROBADA") {
     return NextResponse.json({ error: "La solicitud debe estar aprobada" }, { status: 400 })
   }
@@ -27,8 +31,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const noOk = respuestas.filter((r: { valor: string }) => r.valor === "NO_OK")
-  const items = noOk.length > 0
-    ? await prisma.checklistItem.findMany({ where: { id: { in: noOk.map((r: { itemId: number }) => r.itemId) } } })
+  // Crear observación para cualquier ítem que tenga texto de observación, sea OK o NO_OK
+  const conObservacion = respuestas.filter(
+    (r: { valor: string; observacion?: string }) => r.valor === "NO_OK" || r.observacion?.trim()
+  )
+  const items = conObservacion.length > 0
+    ? await prisma.checklistItem.findMany({ where: { id: { in: conObservacion.map((r: { itemId: number }) => r.itemId) } } })
     : []
   const itemPorId = new Map(items.map((i) => [i.id, i.descripcion]))
   const userId = parseInt(auth.session.user.id)
@@ -55,8 +63,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         usuarioId: userId,
       },
     }),
-    ...noOk.flatMap((r: { itemId: number; observacion?: string }) => {
-      const descripcion = `${itemPorId.get(r.itemId) ?? "Ítem"}: ${r.observacion}`
+    ...conObservacion.flatMap((r: { itemId: number; valor: string; observacion?: string }) => {
+      const prefijo = r.valor === "NO_OK" ? "[NO OK]" : "[OK]"
+      const descripcion = `${prefijo} ${itemPorId.get(r.itemId) ?? "Ítem"}: ${r.observacion}`
       return [
         prisma.observacionVehiculo.create({
           data: {

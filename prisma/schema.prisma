@@ -235,8 +235,7 @@ model LoteFarmacia {
 enum TipoVehiculo {
   CAMIONETA
   SEDAN
-  CAMION_LIVIANO
-  CAMION_PESADO
+  CAMION
   MAQUINARIA
   BUS
   OTRO

@@ -24,7 +24,9 @@ export default function Layout({ children, titulo }: LayoutProps) {
   const [alertas, setAlertas] = useState<Alertas | null>(null)
   const [mostrarAlertas, setMostrarAlertas] = useState(false)
   const [menuAbierto, setMenuAbierto] = useState(false)
+  const [flotaMenu, setFlotaMenu] = useState(false)
   const alertasRef = useRef<HTMLDivElement>(null)
+  const flotaMenuRef = useRef<HTMLDivElement>(null)
 
   const role = session?.user?.role
   const cargando = status === "loading"
@@ -40,30 +42,41 @@ export default function Layout({ children, titulo }: LayoutProps) {
     { href: "/farmacia", label: "Farmacia", roles: ["ADMIN", "FARMACIA", "VIEWER"] },
     { href: "/farmacia/pacientes", label: "Pacientes", roles: ["ADMIN", "FARMACIA"] },
     { href: "/dashboard/stats", label: "Estadisticas", roles: null },
-    { href: "/flota", label: "Flota", roles: ["ADMIN", "FLOTA", "ENCARGADO"] },
-    { href: "/flota/solicitudes", label: "Solicitudes", roles: ["FLOTA", "ENCARGADO"] },
-    { href: "/flota/conductores", label: "Conductores", roles: ["ADMIN", "ENCARGADO"] },
-    { href: "/flota/documentos-config", label: "Documentos", roles: ["ADMIN", "ENCARGADO"] },
     { href: "/admin/usuarios", label: "Usuarios", roles: ["ADMIN"] },
     { href: "/admin/actividad", label: "Actividad", roles: ["ADMIN"] },
+  ]
+
+  // Submenú de Flota — roles se evalúan por separado
+  const flotaLinks = [
+    { href: "/flota", label: "Vehículos", roles: ["ADMIN", "FLOTA", "ENCARGADO"] as string[] },
+    { href: "/flota/solicitudes", label: "Solicitudes", roles: ["ADMIN", "FLOTA", "ENCARGADO"] as string[] },
+    { href: "/flota/conductores", label: "Conductores", roles: ["ADMIN", "ENCARGADO"] as string[] },
+    { href: "/flota/documentos-config", label: "Documentos", roles: ["ADMIN", "ENCARGADO"] as string[] },
   ]
 
   useEffect(() => {
     if (session) fetchAlertas()
   }, [session])
 
+  // Cerrar dropdowns al hacer clic fuera
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (alertasRef.current && !alertasRef.current.contains(e.target as Node)) {
         setMostrarAlertas(false)
+      }
+      if (flotaMenuRef.current && !flotaMenuRef.current.contains(e.target as Node)) {
+        setFlotaMenu(false)
       }
     }
     document.addEventListener("mousedown", handleClick)
     return () => document.removeEventListener("mousedown", handleClick)
   }, [])
 
-  // Cerrar menú móvil al navegar
-  useEffect(() => { setMenuAbierto(false) }, [pathname])
+  // Cerrar menús al navegar
+  useEffect(() => {
+    setMenuAbierto(false)
+    setFlotaMenu(false)
+  }, [pathname])
 
   const fetchAlertas = async () => {
     try {
@@ -82,7 +95,15 @@ export default function Layout({ children, titulo }: LayoutProps) {
   const esActivo = (href: string) =>
     href !== "/dashboard" ? pathname.startsWith(href) : pathname === href
 
+  // Para "Vehículos" (/flota) solo activo en la raíz o en detalle de vehículo
+  const esActivoFlota = (href: string) => {
+    if (href === "/flota") return pathname === "/flota" || pathname.startsWith("/flota/vehiculos")
+    return pathname.startsWith(href)
+  }
+
+  const enFlota = pathname.startsWith("/flota")
   const linksVisibles = navLinks.filter((l) => linkVisible(l.roles))
+  const flotaLinksVisibles = flotaLinks.filter((l) => linkVisible(l.roles))
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -112,6 +133,44 @@ export default function Layout({ children, titulo }: LayoutProps) {
                 {l.label}
               </a>
             ))}
+
+            {/* Dropdown Flota */}
+            {puedeVerFlota && (
+              <div className="relative" ref={flotaMenuRef}>
+                <button
+                  onClick={() => setFlotaMenu(!flotaMenu)}
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+                    enFlota ? "bg-blue-100 text-blue-700" : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  Flota
+                  <svg
+                    className={`w-3 h-3 transition-transform duration-150 ${flotaMenu ? "rotate-180" : ""}`}
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {flotaMenu && (
+                  <div className="absolute top-full left-0 mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-100 z-50 py-1 overflow-hidden">
+                    {flotaLinksVisibles.map((l) => (
+                      <a
+                        key={l.href}
+                        href={l.href}
+                        className={`block px-4 py-2 text-sm transition-colors ${
+                          esActivoFlota(l.href)
+                            ? "bg-blue-50 text-blue-700 font-medium"
+                            : "text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        {l.label}
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Derecha: campana + usuario + cerrar sesión + hamburger */}
@@ -245,6 +304,27 @@ export default function Layout({ children, titulo }: LayoutProps) {
                 {l.label}
               </a>
             ))}
+
+            {/* Sección Flota en móvil */}
+            {puedeVerFlota && (
+              <div>
+                <p className="px-4 pt-3 pb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  Flota
+                </p>
+                {flotaLinksVisibles.map((l) => (
+                  <a
+                    key={l.href}
+                    href={l.href}
+                    className={`block px-6 py-2.5 rounded-lg text-base font-medium transition-colors ${
+                      esActivoFlota(l.href) ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {l.label}
+                  </a>
+                ))}
+              </div>
+            )}
+
             <div className="border-t border-gray-100 pt-3 mt-2">
               <p className="px-4 py-1 text-sm text-gray-500">
                 {session?.user?.name} · <span className="text-gray-400">{role}</span>

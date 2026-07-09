@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireRole } from "@/lib/apiAuth"
+import { requireRole, denyIfNotOwner } from "@/lib/apiAuth"
 
 // Registrar km salida → crea bitácora y pasa a EN_CURSO
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
+  const auth = await requireRole("FLOTA")
   if (!auth.ok) return auth.response
 
   const { id } = await params
@@ -17,6 +17,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     include: { ordenServicio: true, bitacora: true, checklist: true },
   })
   if (!solicitud) return NextResponse.json({ error: "No encontrado" }, { status: 404 })
+
+  const denyPost = denyIfNotOwner(auth, solicitud.creadoPorId)
+  if (denyPost) return denyPost
+
   if (solicitud.estado !== "APROBADA" || !solicitud.ordenServicio?.firmada) {
     return NextResponse.json({ error: "La orden debe estar firmada antes de registrar salida" }, { status: 400 })
   }
@@ -46,7 +50,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
 // Registrar km llegada + observacion
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
+  const auth = await requireRole("FLOTA")
   if (!auth.ok) return auth.response
 
   const { id } = await params
@@ -59,6 +63,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     include: { bitacora: true },
   })
   if (!solicitud?.bitacora) return NextResponse.json({ error: "Bitácora no iniciada" }, { status: 404 })
+
+  const denyPatch = denyIfNotOwner(auth, solicitud.creadoPorId)
+  if (denyPatch) return denyPatch
+
   if (solicitud.bitacora.kmLlegada) {
     return NextResponse.json({ error: "Km de llegada ya registrado" }, { status: 409 })
   }
@@ -69,6 +77,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const userId = parseInt(auth.session.user.id)
   const kmRecorridos = parseInt(kmLlegada) - solicitud.bitacora.kmSalida
   const obsTexto = observacion?.trim() || `Viaje a ${solicitud.destino} — ${kmRecorridos} km recorridos`
+  const obsViaje = observacion?.trim() || null
 
   await prisma.$transaction([
     prisma.bitacoraViaje.update({
@@ -76,7 +85,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       data: {
         kmLlegada: parseInt(kmLlegada),
         horaRetornoReal: horaRetornoReal ? new Date(horaRetornoReal) : null,
-        observacion: observacion?.trim() || null,
+        observacion: obsViaje,
       },
     }),
     prisma.vehiculo.update({
@@ -96,6 +105,26 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         usuarioId: userId,
       },
     }),
+    ...(obsViaje ? [
+      prisma.observacionVehiculo.create({
+        data: {
+          vehiculoId: solicitud.vehiculoId,
+          solicitudId: parseInt(id),
+          origen: "VIAJE",
+          descripcion: obsViaje,
+          creadoPorId: userId,
+        },
+      }),
+      prisma.hojaVidaVehiculo.create({
+        data: {
+          vehiculoId: solicitud.vehiculoId,
+          solicitudId: parseInt(id),
+          tipo: "OBSERVACION",
+          descripcion: obsViaje,
+          usuarioId: userId,
+        },
+      }),
+    ] : []),
   ])
 
   return NextResponse.json({ ok: true })
