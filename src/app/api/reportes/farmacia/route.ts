@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@/lib/apiAuth"
+import { requireRole } from "@/lib/apiAuth"
 import { prisma } from "@/lib/prisma"
 import { TipoMovimiento } from "@/generated/prisma/client"
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth()
+  const auth = await requireRole("ADMIN", "FARMACIA")
   if (!auth.ok) return auth.response
 
   const { searchParams } = new URL(req.url)

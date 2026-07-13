@@ -199,7 +199,10 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(resultado, { status: 201 })
   } catch (error) {
-    const mensaje = error instanceof Error ? error.message : "Error al registrar movimiento"
-    return NextResponse.json({ error: mensaje }, { status: 400 })
+    if (error instanceof Error && !("code" in error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    console.error("[farmacia/movimientos] error:", error)
+    return NextResponse.json({ error: "Error al registrar movimiento" }, { status: 500 })
   }
 }

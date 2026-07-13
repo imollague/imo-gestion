@@ -74,7 +74,10 @@ export async function POST(
 
     return NextResponse.json(resultado, { status: 201 })
   } catch (error) {
-    const mensaje = error instanceof Error ? error.message : "Error al anular movimiento"
-    return NextResponse.json({ error: mensaje }, { status: 400 })
+    if (error instanceof Error && !("code" in error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    console.error("[bodega/anular] error:", error)
+    return NextResponse.json({ error: "Error al anular movimiento" }, { status: 500 })
   }
 }

@@ -66,7 +66,10 @@ export async function POST(
 
     return NextResponse.json(resultado, { status: 200 })
   } catch (error) {
-    const mensaje = error instanceof Error ? error.message : "Error al retirar lote"
-    return NextResponse.json({ error: mensaje }, { status: 400 })
+    if (error instanceof Error && !("code" in error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    console.error("[farmacia/retirar] error:", error)
+    return NextResponse.json({ error: "Error al retirar lote" }, { status: 500 })
   }
 }

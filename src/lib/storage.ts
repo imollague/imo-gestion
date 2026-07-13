@@ -15,10 +15,15 @@ export async function uploadFile(
   _contentType: string
 ): Promise<{ publicUrl: string; error: null } | { publicUrl: null; error: string }> {
   if (IS_LOCAL) {
-    const absPath = path.join(UPLOADS_DIR, storagePath)
-    await ensureDir(absPath)
-    await fs.writeFile(absPath, buffer)
-    return { publicUrl: `/uploads/${storagePath.replace(/\\/g, "/")}`, error: null }
+    try {
+      const absPath = path.join(UPLOADS_DIR, storagePath)
+      await ensureDir(absPath)
+      await fs.writeFile(absPath, buffer)
+      return { publicUrl: `/uploads/${storagePath.replace(/\\/g, "/")}`, error: null }
+    } catch (e) {
+      console.error("[storage] local write error:", e)
+      return { publicUrl: null, error: "Error al guardar archivo" }
+    }
   }
 
   const { supabaseStorage, BUCKET } = await import("./supabase-storage")
@@ -26,7 +31,10 @@ export async function uploadFile(
     .from(BUCKET)
     .upload(storagePath, buffer, { upsert: true })
 
-  if (error) return { publicUrl: null, error: error.message }
+  if (error) {
+    console.error("[storage] supabase upload error:", error)
+    return { publicUrl: null, error: "Error al subir archivo" }
+  }
 
   const { data: { publicUrl } } = supabaseStorage.storage.from(BUCKET).getPublicUrl(storagePath)
   return { publicUrl, error: null }

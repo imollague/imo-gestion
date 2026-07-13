@@ -166,7 +166,11 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(resultado, { status: 201 })
   } catch (error) {
-    const mensaje = error instanceof Error ? error.message : "Error al registrar movimiento"
-    return NextResponse.json({ error: mensaje }, { status: 400 })
+    // Pasar mensaje solo si es un error de aplicación (sin code de Prisma)
+    if (error instanceof Error && !("code" in error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    console.error("[bodega/movimientos] error:", error)
+    return NextResponse.json({ error: "Error al registrar movimiento" }, { status: 500 })
   }
 }

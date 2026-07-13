@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
   const ahora = new Date()
   const en30dias = new Date(ahora.getTime() + 30 * 24 * 60 * 60 * 1000)
 
+  try {
   // Paralelo: obtener datos de alerta
   const [
     productosCriticos,
@@ -228,7 +229,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     mensaje: "Email enviado",
-    destinatarios: EMAIL_ADMINS,
+    destinatariosCount: EMAIL_ADMINS.length,
     alertas: {
       productosCriticos: productosCriticos.length,
       medicamentosCriticos: medicamentosCriticos.length,
@@ -238,4 +239,8 @@ export async function GET(req: NextRequest) {
       vehiculosPorVencer: vehiculosPorVencer.length,
     },
   })
+  } catch (error) {
+    console.error("[cron/alertas-email] error:", error)
+    return NextResponse.json({ error: "Error interno al procesar alertas" }, { status: 500 })
+  }
 }

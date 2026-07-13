@@ -64,6 +64,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const foto = await prisma.fotoRevisionVehiculo.findUnique({ where: { id: parseInt(fotoId) } })
   if (!foto) return NextResponse.json({ error: "No encontrado" }, { status: 404 })
+  if (foto.solicitudId !== parseInt(id)) return NextResponse.json({ error: "No autorizado" }, { status: 403 })
 
   const storagePath = extractStoragePath(foto.url)
   if (storagePath) await deleteFile(storagePath)
