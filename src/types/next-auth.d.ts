@@ -9,6 +9,7 @@ declare module "next-auth" {
       username: string
       role: Role
       conductorFlotaId: number | null
+      rut: string | null
     }
   }
 
@@ -18,6 +19,7 @@ declare module "next-auth" {
     username: string
     role: Role
     conductorFlotaId: number | null
+    rut: string | null
   }
 }
 
@@ -27,5 +29,6 @@ declare module "next-auth/jwt" {
     username: string
     role: Role
     conductorFlotaId: number | null
+    rut: string | null
   }
 }

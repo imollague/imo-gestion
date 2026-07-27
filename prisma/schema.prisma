@@ -15,30 +15,56 @@ datasource db {
 
 // Usuarios del sistema
 model User {
-  id        Int      @id @default(autoincrement())
-  username  String   @unique
-  password  String
-  name      String
-  role      Role     @default(VIEWER)
+  id             Int      @id @default(autoincrement())
+  username       String   @unique
+  password       String
+  name           String
+  role           Role     @default(VIEWER)
   roleExpiration DateTime?
-  roleAnterior Role?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
+  roleAnterior   Role?
+  active         Boolean  @default(true)
+  rut            String?  // RUT del funcionario para firma electrónica FirmaGob (sin puntos ni dígito verificador)
+  createdAt      DateTime @default(now())
 
-  movimientosBodega    MovimientoBodega[]
-  movimientosFarmacia  MovimientoFarmacia[]
-  solicitudesCreadas   SolicitudVehiculo[]  @relation("CreadoPorFlota")
-  solicitudesAprobadas SolicitudVehiculo[]  @relation("AprobacionFlota")
-  solicitudesCerradas  SolicitudVehiculo[]  @relation("CierreFlota")
-  ordenesFlota         OrdenServicioFlota[] @relation("FirmaOrdenFlota")
-  documentosFlota      DocumentoVehiculo[]
-  hojaVidaFlota        HojaVidaVehiculo[]
-  mantencionesFlota    MantencionVehiculo[]
-  observacionesCreadas ObservacionVehiculo[] @relation("CreadorObservacion")
+  movimientosBodega     MovimientoBodega[]
+  movimientosFarmacia   MovimientoFarmacia[]
+  solicitudesCreadas    SolicitudVehiculo[]   @relation("CreadoPorFlota")
+  solicitudesAprobadas  SolicitudVehiculo[]   @relation("AprobacionFlota")
+  solicitudesCerradas   SolicitudVehiculo[]   @relation("CierreFlota")
+  ordenesFlota          OrdenServicioFlota[]  @relation("FirmaOrdenFlota")
+  documentosFlota       DocumentoVehiculo[]
+  hojaVidaFlota         HojaVidaVehiculo[]
+  mantencionesFlota     MantencionVehiculo[]
+  observacionesCreadas  ObservacionVehiculo[] @relation("CreadorObservacion")
   observacionesCerradas ObservacionVehiculo[] @relation("CierreObservacion")
-  notasObservacion     ObservacionNota[]
-  archivosObservacion  ObservacionArchivo[]
-  conductorFlota       ConductorFlota?
+  notasObservacion      ObservacionNota[]
+  archivosObservacion   ObservacionArchivo[]
+  conductorFlota        ConductorFlota?
+  docsCreados           DocumentoFirmado[]    @relation("DocFirmadoCreadoPor")
+  docsFirmados          DocumentoFirmado[]    @relation("DocFirmadoFirmadoPor")
+}
+
+// ─── MÓDULO FIRMA ELECTRÓNICA (FirmaGob) ──────────────
+
+model DocumentoFirmado {
+  id                   Int       @id @default(autoincrement())
+  origen               String    // "ORDEN_SERVICIO_FLOTA" | "ACTA" | "PRUEBA" | etc.
+  origenId             Int?      // ID del documento origen (opcional)
+  descripcion          String
+  estado               String    @default("PENDIENTE") // PENDIENTE | FIRMADO | ERROR
+  urlOriginal          String?   // URL en Supabase Storage del PDF original
+  urlFirmado           String?   // URL en Supabase Storage del PDF firmado por FirmaGob
+  checksumOriginal     String?
+  checksumFirmado      String?
+  idSolicitudFirmagob  String?   // idSolicitud retornado por FirmaGob (referencia de la transacción)
+  errorMsg             String?
+  firmadoEn            DateTime?
+  createdAt            DateTime  @default(now())
+
+  creadoPorId   Int
+  creadoPor     User  @relation("DocFirmadoCreadoPor", fields: [creadoPorId], references: [id])
+  firmadoPorId  Int?
+  firmadoPor    User? @relation("DocFirmadoFirmadoPor", fields: [firmadoPorId], references: [id])
 }
 
 enum Role {

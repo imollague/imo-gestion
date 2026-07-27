@@ -30,6 +30,7 @@ export const authOptions = {
           username: user.username,
           role: user.role,
           conductorFlotaId: user.conductorFlota?.id ?? null,
+          rut: user.rut ?? null,
         }
       },
     }),
@@ -41,6 +42,7 @@ export const authOptions = {
         token.username = user.username
         token.role = user.role
         token.conductorFlotaId = user.conductorFlotaId
+        token.rut = user.rut
       }
       return token
     },
@@ -50,6 +52,7 @@ export const authOptions = {
         session.user.username = token.username
         session.user.role = token.role
         session.user.conductorFlotaId = token.conductorFlotaId
+        session.user.rut = token.rut
       }
       return session
     },
