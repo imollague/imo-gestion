@@ -1,5 +1,18 @@
-import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
+
+// JWT HS256 sin dependencia externa — compatible con Turbopack/Edge
+function signJwtHs256(payload: object, secret: string): string {
+  const b64url = (s: string) =>
+    Buffer.from(s).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+  const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
+  const body = b64url(JSON.stringify(payload))
+  const sig = crypto
+    .createHmac('sha256', secret)
+    .update(`${header}.${body}`)
+    .digest('base64')
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+  return `${header}.${body}.${sig}`
+}
 
 const API_URL = process.env.FIRMAGOB_ENV === 'test'
   ? process.env.FIRMAGOB_API_URL_TEST!
@@ -27,7 +40,7 @@ function generarToken(rut: string, purpose: string): string {
     expiration: expirationChile(25 * 60 * 1000), // 25 min (máximo permitido: 30 min)
     purpose,
   }
-  return jwt.sign(payload, process.env.FIRMAGOB_SECRET!, { algorithm: 'HS256' })
+  return signJwtHs256(payload, process.env.FIRMAGOB_SECRET!)
 }
 
 function checksumBase64(base64: string): string {
