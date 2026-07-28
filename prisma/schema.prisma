@@ -414,7 +414,6 @@ model OrdenServicioFlota {
   solicitud      SolicitudVehiculo @relation(fields: [solicitudId], references: [id])
   horaSalidaEst  DateTime
   horaRetornoEst DateTime?
-  folioFedoks    String?
   firmadaPorId   Int?
   firmadaPor     User?             @relation("FirmaOrdenFlota", fields: [firmadaPorId], references: [id])
   fechaFirma     DateTime?

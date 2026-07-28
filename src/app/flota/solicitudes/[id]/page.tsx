@@ -41,7 +41,7 @@ interface Solicitud {
   aprobadoPor: { name: string } | null
   cerradoPor: { name: string } | null
   checklist: { id: number; respuestas: { item: ChecklistItem; valor: string; observacion: string | null }[] } | null
-  ordenServicio: { id: number; horaSalidaEst: string; horaRetornoEst: string | null; folioFedoks: string | null; firmada: boolean; firmadaPor: { name: string } | null; fechaFirma: string | null } | null
+  ordenServicio: { id: number; horaSalidaEst: string; horaRetornoEst: string | null; firmada: boolean; firmadaPor: { name: string } | null; fechaFirma: string | null } | null
   bitacora: { id: number; kmSalida: number; kmLlegada: number | null; horaRetornoReal: string | null; observacion: string | null; paradas: ParadaViaje[] } | null
   hojaVida: { id: number; tipo: string; descripcion: string; fecha: string; usuario: { name: string } }[]
   fotosRevision: FotoRevision[]
@@ -69,12 +69,11 @@ function fmtFecha(iso: string) {
   return new Date(iso).toLocaleDateString("es-CL")
 }
 
-function generarPDFOrden(s: Solicitud) {
+function buildDocPDF(s: Solicitud): InstanceType<typeof jsPDF> {
   const doc = new jsPDF()
   const margen = 20
   let y = margen
 
-  // Encabezado
   doc.setFontSize(11)
   doc.setTextColor(100)
   doc.text("Municipalidad de Ollagüe — Sistema IMO", margen, y)
@@ -88,7 +87,6 @@ function generarPDFOrden(s: Solicitud) {
   doc.line(margen, y, 210 - margen, y)
   y += 10
 
-  // Datos
   const campos: [string, string][] = [
     ["Conductor", s.conductorNombre],
     ["Vehículo", `${s.vehiculo.patente} — ${s.vehiculo.marca} ${s.vehiculo.modelo}`],
@@ -97,7 +95,6 @@ function generarPDFOrden(s: Solicitud) {
     ["Salida estimada", s.ordenServicio?.horaSalidaEst ? fmt(s.ordenServicio.horaSalidaEst) : "—"],
     ["Retorno estimado", s.ordenServicio?.horaRetornoEst ? fmt(s.ordenServicio.horaRetornoEst) : "—"],
     ["Fecha solicitud", fmtFecha(s.fechaSolicitud)],
-    ...(s.ordenServicio?.folioFedoks ? [["Folio FEDOKS", s.ordenServicio.folioFedoks] as [string, string]] : []),
   ]
 
   doc.setFont("helvetica", "normal")
@@ -110,7 +107,6 @@ function generarPDFOrden(s: Solicitud) {
     y += 8
   }
 
-  // Firma
   y += 16
   doc.line(margen, y, margen + 70, y)
   y += 6
@@ -118,11 +114,14 @@ function generarPDFOrden(s: Solicitud) {
   doc.setTextColor(100)
   doc.text("Firma Autorizante", margen, y)
   doc.text("(Administrador / Alcalde / Subrogante)", margen, y + 5)
-
   doc.line(210 - margen - 70, y - 6, 210 - margen, y - 6)
   doc.text("Firma Conductor", 210 - margen - 70, y)
 
-  doc.save(`OS-${s.id}-${s.vehiculo.patente}.pdf`)
+  return doc
+}
+
+function generarPDFOrden(s: Solicitud) {
+  buildDocPDF(s).save(`OS-${s.id}-${s.vehiculo.patente}.pdf`)
 }
 
 // ─── Panel de observaciones (ENCARGADO/ADMIN) ─────────
@@ -783,6 +782,9 @@ export default function SolicitudDetallePage() {
   const [refreshing, setRefreshing] = useState(false)
   const [motivoRechazo, setMotivoRechazo] = useState("")
   const [loadingAction, setLoadingAction] = useState(false)
+  const [showOtpModal, setShowOtpModal] = useState(false)
+  const [otpValue, setOtpValue] = useState("")
+  const [firmaError, setFirmaError] = useState("")
 
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login")
@@ -812,11 +814,25 @@ export default function SolicitudDetallePage() {
     if (res.ok) cargar()
   }
 
-  const firmarOrden = async () => {
+  const firmarConOtp = async () => {
+    if (!solicitud || !otpValue.trim()) return
     setLoadingAction(true)
-    const res = await fetch(`/api/flota/solicitudes/${id}/orden/firmar`, { method: "POST" })
+    setFirmaError("")
+    const pdfBase64 = buildDocPDF(solicitud).output("datauristring").split(",")[1]
+    const res = await fetch(`/api/flota/solicitudes/${id}/orden/firmar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pdfBase64, otp: otpValue }),
+    })
     setLoadingAction(false)
-    if (res.ok) cargar()
+    if (res.ok) {
+      setShowOtpModal(false)
+      setOtpValue("")
+      cargar()
+    } else {
+      const data = await res.json()
+      setFirmaError(data.error || "Error al firmar")
+    }
   }
 
   const role = session?.user?.role
@@ -961,13 +977,10 @@ export default function SolicitudDetallePage() {
                       <div className="flex justify-between"><span className="text-gray-500">Salida estimada</span>
                         <span>{solicitud.ordenServicio?.horaSalidaEst ? fmt(solicitud.ordenServicio.horaSalidaEst) : "—"}</span>
                       </div>
-                      {solicitud.ordenServicio?.folioFedoks && (
-                        <div className="flex justify-between"><span className="text-gray-500">Folio FEDOKS</span><span className="font-mono">{solicitud.ordenServicio.folioFedoks}</span></div>
-                      )}
                     </div>
-                    <button onClick={firmarOrden} disabled={loadingAction}
+                    <button onClick={() => setShowOtpModal(true)} disabled={loadingAction}
                       className="w-full bg-blue-600 text-white py-3.5 rounded-xl text-base font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                      {loadingAction ? "Procesando..." : "✅ Autorizar Orden de Servicio"}
+                      ✅ Autorizar Orden de Servicio
                     </button>
                     <div className="border-t pt-3">
                       <input value={motivoRechazo} onChange={(e) => setMotivoRechazo(e.target.value)}
@@ -986,7 +999,7 @@ export default function SolicitudDetallePage() {
                     <p className="text-gray-400 mt-2 mb-5">El encargado de vehículos debe autorizar la orden de servicio.</p>
                     <button onClick={() => generarPDFOrden(solicitud)}
                       className="inline-flex items-center gap-2 bg-gray-100 text-gray-700 px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors">
-                      📄 Descargar PDF para FEDOKS
+                      📄 Descargar PDF
                     </button>
                   </div>
                 )}
@@ -1098,6 +1111,45 @@ export default function SolicitudDetallePage() {
           ← Volver
         </button>
       </div>
+
+      {/* Modal OTP FirmaGob */}
+      {showOtpModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
+            <h3 className="text-lg font-semibold text-gray-800 mb-1">Firma digital FirmaGob</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Ingresa el código OTP de tu autenticador para firmar la Orden de Servicio N° {solicitud?.id}.
+            </p>
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              value={otpValue}
+              onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, ""))}
+              placeholder="000000"
+              className="w-full border rounded-lg px-3 py-2.5 text-center text-2xl font-mono tracking-[0.4em] focus:outline-none focus:ring-2 focus:ring-blue-300 mb-3"
+              autoFocus
+            />
+            {firmaError && <p className="text-red-600 text-sm mb-3">{firmaError}</p>}
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowOtpModal(false); setOtpValue(""); setFirmaError("") }}
+                disabled={loadingAction}
+                className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={firmarConOtp}
+                disabled={loadingAction || otpValue.length < 6}
+                className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+              >
+                {loadingAction ? "Firmando..." : "Firmar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   )
 }

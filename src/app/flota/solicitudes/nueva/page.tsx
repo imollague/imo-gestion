@@ -98,7 +98,7 @@ export default function NuevaSolicitudPage() {
   const [error, setError] = useState("")
   const [form, setForm] = useState({
     vehiculoId: "", conductorNombre: "", destino: "", proposito: "",
-    horaSalidaEst: "", horaRetornoEst: "", folioFedoks: "",
+    horaSalidaEst: "", horaRetornoEst: "",
   })
 
   useEffect(() => {
@@ -254,13 +254,6 @@ export default function NuevaSolicitudPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Hora de retorno estimada</label>
                 <input type="datetime-local" value={form.horaRetornoEst}
                   onChange={(e) => set("horaRetornoEst", e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Folio FEDOKS (opcional)</label>
-                <input value={form.folioFedoks}
-                  onChange={(e) => set("folioFedoks", e.target.value)}
-                  placeholder="Ej: EXP-2026-001"
                   className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
               </div>
             </div>

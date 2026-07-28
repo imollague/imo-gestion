@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const {
     vehiculoId, conductorFlotaId, conductorNombre, destino, proposito,
-    horaSalidaEst, horaRetornoEst, folioFedoks,
+    horaSalidaEst, horaRetornoEst,
   } = body
 
   if (!vehiculoId || !conductorNombre || !destino || !proposito || !horaSalidaEst) {
@@ -72,7 +72,6 @@ export async function POST(req: NextRequest) {
         create: {
           horaSalidaEst: new Date(horaSalidaEst),
           horaRetornoEst: horaRetornoEst ? new Date(horaRetornoEst) : null,
-          folioFedoks: folioFedoks?.trim() || null,
         },
       },
     },
