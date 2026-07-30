@@ -782,8 +782,6 @@ export default function SolicitudDetallePage() {
   const [refreshing, setRefreshing] = useState(false)
   const [motivoRechazo, setMotivoRechazo] = useState("")
   const [loadingAction, setLoadingAction] = useState(false)
-  const [showOtpModal, setShowOtpModal] = useState(false)
-  const [otpValue, setOtpValue] = useState("")
   const [firmaError, setFirmaError] = useState("")
 
   useEffect(() => {
@@ -814,20 +812,18 @@ export default function SolicitudDetallePage() {
     if (res.ok) cargar()
   }
 
-  const firmarConOtp = async () => {
-    if (!solicitud || !otpValue.trim()) return
+  const firmarOrden = async () => {
+    if (!solicitud) return
     setLoadingAction(true)
     setFirmaError("")
     const pdfBase64 = buildDocPDF(solicitud).output("datauristring").split(",")[1]
     const res = await fetch(`/api/flota/solicitudes/${id}/orden/firmar`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pdfBase64, otp: otpValue }),
+      body: JSON.stringify({ pdfBase64 }),
     })
     setLoadingAction(false)
     if (res.ok) {
-      setShowOtpModal(false)
-      setOtpValue("")
       cargar()
     } else {
       const data = await res.json()
@@ -978,9 +974,10 @@ export default function SolicitudDetallePage() {
                         <span>{solicitud.ordenServicio?.horaSalidaEst ? fmt(solicitud.ordenServicio.horaSalidaEst) : "—"}</span>
                       </div>
                     </div>
-                    <button onClick={() => setShowOtpModal(true)} disabled={loadingAction}
+                    {firmaError && <p className="text-red-600 text-sm">{firmaError}</p>}
+                    <button onClick={firmarOrden} disabled={loadingAction}
                       className="w-full bg-blue-600 text-white py-3.5 rounded-xl text-base font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                      ✅ Autorizar Orden de Servicio
+                      {loadingAction ? "Firmando..." : "✅ Autorizar Orden de Servicio"}
                     </button>
                     <div className="border-t pt-3">
                       <input value={motivoRechazo} onChange={(e) => setMotivoRechazo(e.target.value)}
@@ -1112,44 +1109,6 @@ export default function SolicitudDetallePage() {
         </button>
       </div>
 
-      {/* Modal OTP FirmaGob */}
-      {showOtpModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
-            <h3 className="text-lg font-semibold text-gray-800 mb-1">Firma digital FirmaGob</h3>
-            <p className="text-sm text-gray-500 mb-4">
-              Ingresa el código OTP de tu autenticador para firmar la Orden de Servicio N° {solicitud?.id}.
-            </p>
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              value={otpValue}
-              onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, ""))}
-              placeholder="000000"
-              className="w-full border rounded-lg px-3 py-2.5 text-center text-2xl font-mono tracking-[0.4em] focus:outline-none focus:ring-2 focus:ring-blue-300 mb-3"
-              autoFocus
-            />
-            {firmaError && <p className="text-red-600 text-sm mb-3">{firmaError}</p>}
-            <div className="flex gap-3">
-              <button
-                onClick={() => { setShowOtpModal(false); setOtpValue(""); setFirmaError("") }}
-                disabled={loadingAction}
-                className="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={firmarConOtp}
-                disabled={loadingAction || otpValue.length < 6}
-                className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
-              >
-                {loadingAction ? "Firmando..." : "Firmar"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </Layout>
   )
 }

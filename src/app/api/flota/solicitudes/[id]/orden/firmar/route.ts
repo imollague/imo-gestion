@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireRole } from "@/lib/apiAuth"
-import { firmarDocumentoAtendido } from "@/lib/firmagob"
+import { firmarDocumentoDesatendido } from "@/lib/firmagob"
 import { uploadFile } from "@/lib/storage"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -32,9 +32,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const body = await req.json()
-  const { pdfBase64, otp } = body
-  if (!pdfBase64 || !otp) {
-    return NextResponse.json({ error: "Campos requeridos: pdfBase64, otp" }, { status: 400 })
+  const { pdfBase64 } = body
+  if (!pdfBase64) {
+    return NextResponse.json({ error: "Campo requerido: pdfBase64" }, { status: 400 })
   }
 
   const userId = parseInt(auth.session.user.id)
@@ -62,8 +62,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     await prisma.documentoFirmado.update({ where: { id: doc.id }, data: { urlOriginal } })
   }
 
-  // 3. Firmar con FirmaGob
-  const resultado = await firmarDocumentoAtendido({ rutFirmante: rut, otp, pdfBase64, descripcion })
+  // 3. Firmar con FirmaGob (firma desatendida — sin OTP, firma simple bajo Ley 19.799)
+  const resultado = await firmarDocumentoDesatendido({ rutFirmante: rut, pdfBase64, descripcion })
 
   if (!resultado.ok) {
     await prisma.documentoFirmado.update({
