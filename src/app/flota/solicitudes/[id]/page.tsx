@@ -42,6 +42,7 @@ interface Solicitud {
   cerradoPor: { name: string } | null
   checklist: { id: number; respuestas: { item: ChecklistItem; valor: string; observacion: string | null }[] } | null
   ordenServicio: { id: number; horaSalidaEst: string; horaRetornoEst: string | null; firmada: boolean; firmadaPor: { name: string } | null; fechaFirma: string | null } | null
+  documentoFirmadoOS: { urlFirmado: string | null; urlOriginal: string | null; estado: string; firmadoEn: string | null } | null
   bitacora: { id: number; kmSalida: number; kmLlegada: number | null; horaRetornoReal: string | null; observacion: string | null; paradas: ParadaViaje[] } | null
   hojaVida: { id: number; tipo: string; descripcion: string; fecha: string; usuario: { name: string } }[]
   fotosRevision: FotoRevision[]
@@ -918,6 +919,27 @@ export default function SolicitudDetallePage() {
                 <div className="flex justify-between">
                   <span className="text-gray-500">OS firmada por</span>
                   <span className="text-gray-700">{solicitud.ordenServicio.firmadaPor?.name}</span>
+                </div>
+              )}
+              {solicitud.documentoFirmadoOS && (
+                <div className="pt-1 border-t">
+                  <p className="text-xs text-gray-400 uppercase font-semibold mb-2">Orden de Servicio</p>
+                  {solicitud.documentoFirmadoOS.urlFirmado ? (
+                    <a href={solicitud.documentoFirmadoOS.urlFirmado} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 hover:underline">
+                      📄 Descargar OS firmada
+                    </a>
+                  ) : solicitud.documentoFirmadoOS.estado === "ERROR" ? (
+                    <p className="text-sm text-red-500">Error al firmar documento</p>
+                  ) : (
+                    <p className="text-sm text-gray-400">Procesando firma...</p>
+                  )}
+                  {solicitud.documentoFirmadoOS.urlOriginal && (
+                    <a href={solicitud.documentoFirmadoOS.urlOriginal} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-xs text-gray-400 hover:text-gray-600 hover:underline mt-1">
+                      📄 OS sin firma
+                    </a>
+                  )}
                 </div>
               )}
               {solicitud.bitacora && (

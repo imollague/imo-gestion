@@ -55,5 +55,11 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   const deny = denyIfNotOwner(auth, solicitud.creadoPorId)
   if (deny) return deny
 
-  return NextResponse.json(solicitud)
+  const documentoFirmadoOS = await prisma.documentoFirmado.findFirst({
+    where: { origen: "ORDEN_SERVICIO_FLOTA", origenId: parseInt(id) },
+    select: { urlFirmado: true, urlOriginal: true, estado: true, firmadoEn: true },
+    orderBy: { id: "desc" },
+  })
+
+  return NextResponse.json({ ...solicitud, documentoFirmadoOS })
 }
