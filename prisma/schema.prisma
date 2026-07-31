@@ -46,6 +46,15 @@ model User {
 
 // ─── MÓDULO FIRMA ELECTRÓNICA (FirmaGob) ──────────────
 
+model ContadorFolio {
+  id      Int    @id @default(autoincrement())
+  modulo  String // "OS_FLOTA" | "MEMO_RRHH" | "RECETA_FARMACIA" | etc.
+  anio    Int
+  ultimo  Int    @default(0)
+
+  @@unique([modulo, anio])
+}
+
 model DocumentoFirmado {
   id                   Int       @id @default(autoincrement())
   origen               String    // "ORDEN_SERVICIO_FLOTA" | "ACTA" | "PRUEBA" | etc.
@@ -412,6 +421,7 @@ model OrdenServicioFlota {
   id             Int               @id @default(autoincrement())
   solicitudId    Int               @unique
   solicitud      SolicitudVehiculo @relation(fields: [solicitudId], references: [id])
+  folio          String?   @unique
   horaSalidaEst  DateTime
   horaRetornoEst DateTime?
   firmadaPorId   Int?

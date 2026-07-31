@@ -41,7 +41,7 @@ interface Solicitud {
   aprobadoPor: { name: string } | null
   cerradoPor: { name: string } | null
   checklist: { id: number; respuestas: { item: ChecklistItem; valor: string; observacion: string | null }[] } | null
-  ordenServicio: { id: number; horaSalidaEst: string; horaRetornoEst: string | null; firmada: boolean; firmadaPor: { name: string } | null; fechaFirma: string | null } | null
+  ordenServicio: { id: number; folio: string | null; horaSalidaEst: string; horaRetornoEst: string | null; firmada: boolean; firmadaPor: { name: string } | null; fechaFirma: string | null } | null
   documentoFirmadoOS: { urlFirmado: string | null; urlOriginal: string | null; estado: string; firmadoEn: string | null } | null
   bitacora: { id: number; kmSalida: number; kmLlegada: number | null; horaRetornoReal: string | null; observacion: string | null; paradas: ParadaViaje[] } | null
   hojaVida: { id: number; tipo: string; descripcion: string; fecha: string; usuario: { name: string } }[]
@@ -82,7 +82,7 @@ function buildDocPDF(s: Solicitud): InstanceType<typeof jsPDF> {
   doc.setFontSize(16)
   doc.setTextColor(0)
   doc.setFont("helvetica", "bold")
-  doc.text(`Orden de Servicio N° ${s.id}`, margen, y)
+  doc.text(s.ordenServicio?.folio ?? `Orden de Servicio N° ${s.id}`, margen, y)
   y += 6
   doc.setDrawColor(200)
   doc.line(margen, y, 210 - margen, y)
@@ -122,7 +122,7 @@ function buildDocPDF(s: Solicitud): InstanceType<typeof jsPDF> {
 }
 
 function generarPDFOrden(s: Solicitud) {
-  buildDocPDF(s).save(`OS-${s.id}-${s.vehiculo.patente}.pdf`)
+  buildDocPDF(s).save(`${s.ordenServicio?.folio ?? `OS-${s.id}`}-${s.vehiculo.patente}.pdf`)
 }
 
 // ─── Panel de observaciones (ENCARGADO/ADMIN) ─────────
@@ -887,7 +887,14 @@ export default function SolicitudDetallePage() {
         {/* Columna izquierda: datos de la solicitud */}
         <div className="lg:col-span-1 space-y-4">
           <div className="bg-white rounded-xl shadow-sm p-5">
-            <p className="text-xs text-gray-400 uppercase font-semibold mb-3">Datos de la solicitud</p>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs text-gray-400 uppercase font-semibold">Datos de la solicitud</p>
+              {solicitud.ordenServicio?.folio && (
+                <span className="text-xs font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                  {solicitud.ordenServicio.folio}
+                </span>
+              )}
+            </div>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-500">Vehículo</span>
@@ -989,6 +996,12 @@ export default function SolicitudDetallePage() {
                       </button>
                     </div>
                     <div className="bg-gray-50 rounded-lg p-4 text-sm space-y-2">
+                      {solicitud.ordenServicio?.folio && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Folio</span>
+                          <span className="font-mono font-bold text-blue-700">{solicitud.ordenServicio.folio}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between"><span className="text-gray-500">Conductor</span><span>{solicitud.conductorNombre}</span></div>
                       <div className="flex justify-between"><span className="text-gray-500">Vehículo</span><span className="font-mono font-bold">{solicitud.vehiculo.patente}</span></div>
                       <div className="flex justify-between"><span className="text-gray-500">Destino</span><span>{solicitud.destino}</span></div>

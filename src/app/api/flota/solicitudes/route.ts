@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireRole } from "@/lib/apiAuth"
+import { siguienteFolio } from "@/lib/folio"
 
 export async function GET(req: NextRequest) {
   const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
@@ -60,6 +61,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "El vehículo ya tiene una solicitud activa" }, { status: 409 })
   }
 
+  const folio = await siguienteFolio("OS_FLOTA", "OS")
+
   const solicitud = await prisma.solicitudVehiculo.create({
     data: {
       vehiculoId: parseInt(vehiculoId),
@@ -70,6 +73,7 @@ export async function POST(req: NextRequest) {
       proposito: proposito.trim(),
       ordenServicio: {
         create: {
+          folio,
           horaSalidaEst: new Date(horaSalidaEst),
           horaRetornoEst: horaRetornoEst ? new Date(horaRetornoEst) : null,
         },
