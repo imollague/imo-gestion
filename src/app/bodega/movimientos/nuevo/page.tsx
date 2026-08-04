@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { useSession } from "next-auth/react"
 import Layout from "@/components/Layout"
 import BuscadorCodigo from "@/components/BuscadorCodigo"
 import ModalConfirmar from "@/components/ModalConfirmar"
@@ -28,8 +29,12 @@ const TIPOS_DOCUMENTO = [
 
 function NuevoMovimientoContent() {
   const router = useRouter()
+  const { status } = useSession()
   const searchParams = useSearchParams()
   const cantidadRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (status === "unauthenticated") router.push("/login")
+  }, [status, router])
 
   const [productoSeleccionado, setProductoSeleccionado] = useState<Producto | null>(null)
   const [error, setError] = useState("")

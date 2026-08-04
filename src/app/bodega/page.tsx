@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import Layout from "@/components/Layout"
 import BotonExportar from "@/components/BotonExportar"
 
@@ -17,13 +19,22 @@ interface Producto {
 }
 
 export default function BodegaPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
+  useEffect(() => {
+    if (status === "unauthenticated") router.push("/login")
+  }, [status, router])
   const [productos, setProductos] = useState<Producto[]>([])
   const [busqueda, setBusqueda] = useState("")
   const [filtroCategoria, setFiltroCategoria] = useState("")
   const [loading, setLoading] = useState(true)
+  const [actasPendientes, setActasPendientes] = useState<{ id: number; descripcion: string; creadoPor: { name: string }; createdAt: string; items: { nombre: string; diferencia: number }[] }[]>([])
+  const [firmandoActa, setFirmandoActa] = useState<number | null>(null)
+  const [actaMsg, setActaMsg] = useState<{ id: number; tipo: "ok" | "error"; texto: string } | null>(null)
 
   useEffect(() => {
     fetchProductos()
+    fetchActasPendientes()
   }, [])
 
   const fetchProductos = async () => {
@@ -32,6 +43,25 @@ export default function BodegaPage() {
     const data = await res.json()
     setProductos(data)
     setLoading(false)
+  }
+
+  const fetchActasPendientes = async () => {
+    const res = await fetch("/api/bodega/inventario")
+    if (res.ok) setActasPendientes(await res.json())
+  }
+
+  const firmarComoJefe = async (actaId: number) => {
+    setFirmandoActa(actaId)
+    setActaMsg(null)
+    const res = await fetch(`/api/bodega/inventario/${actaId}/jefe`, { method: "POST" })
+    const data = await res.json()
+    setFirmandoActa(null)
+    if (res.ok) {
+      setActaMsg({ id: actaId, tipo: "ok", texto: `Acta firmada. ${data.ajustesAplicados} ajuste(s) de stock aplicados.` })
+      fetchActasPendientes()
+    } else {
+      setActaMsg({ id: actaId, tipo: "error", texto: data.error || "Error al firmar" })
+    }
   }
 
   // Categorias unicas para el select
@@ -49,6 +79,10 @@ export default function BodegaPage() {
   })
 
   const productosStockBajo = productos.filter((p) => p.stockActual <= p.stockMinimo)
+
+  const role = session?.user?.role
+  const puedeInventario = role === "ADMIN" || role === "BODEGA"
+  const esJefe = role === "ADMIN"
 
   return (
     <Layout titulo="Bodega Municipal">
@@ -107,7 +141,57 @@ export default function BodegaPage() {
             { header: "Estado", key: "estado", ancho: 12 },
           ]}
         />
+        {puedeInventario && (
+          <a href="/bodega/inventario/nuevo"
+            className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">
+            Toma de Inventario
+          </a>
+        )}
       </div>
+
+      {/* Panel actas pendientes de firma del jefe */}
+      {esJefe && actasPendientes.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+          <h3 className="text-amber-800 font-semibold mb-3">
+            Actas de inventario pendientes de tu firma ({actasPendientes.length})
+          </h3>
+          <div className="space-y-3">
+            {actasPendientes.map((acta) => (
+              <div key={acta.id} className="bg-white border border-amber-100 rounded-lg p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800">{acta.descripcion}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Realizado por: {acta.creadoPor.name} — {new Date(acta.createdAt).toLocaleDateString("es-CL")}
+                    </p>
+                    {acta.items.length > 0 && (
+                      <ul className="mt-2 text-xs text-gray-600 space-y-0.5">
+                        {acta.items.map((item, i) => (
+                          <li key={i}>
+                            {item.nombre}: diferencia de {item.diferencia > 0 ? "+" : ""}{item.diferencia} unidades
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {actaMsg?.id === acta.id && (
+                      <p className={`text-xs mt-2 ${actaMsg.tipo === "ok" ? "text-green-700" : "text-red-600"}`}>
+                        {actaMsg.texto}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => firmarComoJefe(acta.id)}
+                    disabled={firmandoActa === acta.id}
+                    className="shrink-0 bg-amber-600 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                  >
+                    {firmandoActa === acta.id ? "Firmando..." : "Firmar y aplicar ajustes"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Buscador y filtro categoria */}
       <div className="flex gap-3 mb-4">

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { useSession } from "next-auth/react"
 import Layout from "@/components/Layout"
 import BuscadorCodigo from "@/components/BuscadorCodigo"
 import BuscadorPaciente from "@/components/BuscadorPaciente"
@@ -29,8 +30,12 @@ interface Paciente {
 
 function NuevoMovimientoFarmaciaContent() {
   const router = useRouter()
+  const { status } = useSession()
   const searchParams = useSearchParams()
   const cantidadRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (status === "unauthenticated") router.push("/login")
+  }, [status, router])
 
   const [medicamentoSeleccionado, setMedicamentoSeleccionado] = useState<Medicamento | null>(null)
   const [pacienteSeleccionado, setPacienteSeleccionado] = useState<Paciente | null>(null)

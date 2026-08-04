@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import Layout from "@/components/Layout"
 import { validarRut, formatearRut } from "@/lib/validarRut"
 
@@ -15,6 +17,11 @@ interface Paciente {
 }
 
 export default function PacientesPage() {
+  const { status } = useSession()
+  const router = useRouter()
+  useEffect(() => {
+    if (status === "unauthenticated") router.push("/login")
+  }, [status, router])
   const [pacientes, setPacientes] = useState<Paciente[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)

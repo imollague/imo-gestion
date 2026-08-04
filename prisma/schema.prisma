@@ -42,6 +42,9 @@ model User {
   conductorFlota        ConductorFlota?
   docsCreados           DocumentoFirmado[]    @relation("DocFirmadoCreadoPor")
   docsFirmados          DocumentoFirmado[]    @relation("DocFirmadoFirmadoPor")
+  actasInventarioCreadaPor        ActaInventario[] @relation("ActasInventarioCreadaPor")
+  actasInventarioJefeSeleccionado ActaInventario[] @relation("ActasInventarioJefeSeleccionado")
+  actasInventarioFirmadaJefe      ActaInventario[] @relation("ActasInventarioFirmadaJefe")
 }
 
 // ─── MÓDULO FIRMA ELECTRÓNICA (FirmaGob) ──────────────
@@ -53,6 +56,49 @@ model ContadorFolio {
   ultimo  Int    @default(0)
 
   @@unique([modulo, anio])
+}
+
+model ActaInventario {
+  id                    Int       @id @default(autoincrement())
+  modulo                String    // "BODEGA" | "FARMACIA"
+  estado                String    @default("PENDIENTE_JEFE")
+  // PENDIENTE_JEFE: responsable firmó, hay diferencias, esperando jefe
+  // FIRMADA: completa (sin diferencias = 1 firma; con diferencias = 2 firmas + ajustes aplicados)
+  // ERROR
+  descripcion           String
+  tieneDiferencias      Boolean   @default(false)
+  observaciones         String?
+  urlFirmadoResponsable String?
+  urlFirmadoFinal       String?
+  errorMsg              String?
+  createdAt             DateTime  @default(now())
+
+  creadoPorId    Int
+  creadoPor      User      @relation("ActasInventarioCreadaPor", fields: [creadoPorId], references: [id])
+
+  jefeId         Int?
+  jefe           User?     @relation("ActasInventarioJefeSeleccionado", fields: [jefeId], references: [id])
+
+  firmadoJefeId  Int?
+  firmadoJefe    User?     @relation("ActasInventarioFirmadaJefe", fields: [firmadoJefeId], references: [id])
+  fechaFirmaJefe DateTime?
+
+  items          ActaInventarioItem[]
+}
+
+model ActaInventarioItem {
+  id            Int            @id @default(autoincrement())
+  actaId        Int
+  acta          ActaInventario @relation(fields: [actaId], references: [id])
+  nombre        String
+  codigo        String
+  unidad        String
+  stockSistema  Int
+  stockContado  Int
+  diferencia    Int            // stockContado - stockSistema
+  observacion   String?
+  productoId    Int?           // ref a ProductoBodega (sin FK Prisma para no acoplar)
+  medicamentoId Int?           // ref a Medicamento
 }
 
 model DocumentoFirmado {

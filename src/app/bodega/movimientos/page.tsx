@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
+import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import Layout from "@/components/Layout"
 import BotonExportar from "@/components/BotonExportar"
 import ModalAnular from "@/components/ModalAnular"
@@ -72,6 +74,11 @@ const colorCantidad = (m: Movimiento) => {
 const LIMITE = 50
 
 export default function HistorialMovimientosBodegaPage() {
+  const { status } = useSession()
+  const router = useRouter()
+  useEffect(() => {
+    if (status === "unauthenticated") router.push("/login")
+  }, [status, router])
   const [movimientos, setMovimientos] = useState<Movimiento[]>([])
   const [total, setTotal] = useState(0)
   const [totalVigentes, setTotalVigentes] = useState(0)
