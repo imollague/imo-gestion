@@ -4,7 +4,7 @@ import { requireRole } from "@/lib/apiAuth"
 import { uploadFile, deleteFile, extractStoragePath } from "@/lib/storage"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
+  const auth = await requireRole("ADMIN", "ENCARGADO")
   if (!auth.ok) return auth.response
 
   const { id } = await params
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function DELETE(req: NextRequest, _ctx: { params: Promise<{ id: string }> }) {
-  const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
+  const auth = await requireRole("ADMIN", "ENCARGADO")
   if (!auth.ok) return auth.response
 
   const { documentoId } = await req.json()

@@ -14,7 +14,7 @@ interface Solicitud {
   fechaSolicitud: string
   vehiculo: { patente: string; marca: string; modelo: string }
   checklist: { id: number } | null
-  ordenServicio: { id: number; firmada: boolean } | null
+  ordenServicio: { id: number; folio: string | null; firmada: boolean } | null
   bitacora: { id: number; kmSalida: number; kmLlegada: number | null } | null
   aprobadoPor: { name: string } | null
 }
@@ -114,13 +114,18 @@ export default function SolicitudesPage() {
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-1">
+                  <div className="flex items-center gap-3 mb-1 flex-wrap">
                     <span className="font-mono font-bold text-gray-800">
                       {s.vehiculo.patente}
                     </span>
                     <span className="text-gray-500 text-sm">
                       {s.vehiculo.marca} {s.vehiculo.modelo}
                     </span>
+                    {s.ordenServicio?.folio && (
+                      <span className="font-mono text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                        {s.ordenServicio.folio}
+                      </span>
+                    )}
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${ESTADO_COLOR[s.estado]}`}>
                       {s.estado}
                     </span>

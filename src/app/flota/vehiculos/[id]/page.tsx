@@ -352,7 +352,7 @@ export default function VehiculoDetallePage() {
             {vehiculo.observaciones && (
               <p className="text-sm text-gray-500 italic">{vehiculo.observaciones}</p>
             )}
-            {(role === "ADMIN" || role === "FLOTA" || role === "ENCARGADO") && (
+            {(role === "ADMIN" || role === "ENCARGADO") && (
               <a
                 href={`/flota/vehiculos/${vehiculo.id}/editar`}
                 className="mt-4 block text-center text-sm text-blue-600 hover:underline"
@@ -441,7 +441,7 @@ export default function VehiculoDetallePage() {
                         className="text-blue-600 text-xs hover:underline">
                         Ver
                       </a>
-                      {(role === "ADMIN" || role === "FLOTA") && (
+                      {(role === "ADMIN" || role === "ENCARGADO") && (
                         <button
                           onClick={async () => {
                             if (!confirm("¿Eliminar este documento?")) return
@@ -462,7 +462,7 @@ export default function VehiculoDetallePage() {
                 ))}
               </ul>
             )}
-            {(role === "ADMIN" || role === "FLOTA") && (
+            {(role === "ADMIN" || role === "ENCARGADO") && (
               <SubirDocumento vehiculoId={vehiculo.id} onSubido={cargarVehiculo} />
             )}
           </div>

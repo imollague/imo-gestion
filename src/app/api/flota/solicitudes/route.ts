@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     include: {
       vehiculo: { select: { patente: true, marca: true, modelo: true } },
       checklist: { select: { id: true } },
-      ordenServicio: { select: { id: true, firmada: true } },
+      ordenServicio: { select: { id: true, folio: true, firmada: true } },
       bitacora: { select: { id: true, kmSalida: true, kmLlegada: true } },
       aprobadoPor: { select: { name: true } },
     },

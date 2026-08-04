@@ -2,13 +2,24 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import Layout from "@/components/Layout"
 import { TIPOS_LICENCIA } from "@/lib/licencias"
 
 interface UsuarioFlota { id: number; name: string; username: string }
 
 export default function NuevoConductorPage() {
+  const { data: session, status } = useSession()
   const router = useRouter()
+
+  useEffect(() => {
+    if (status === "unauthenticated") router.push("/login")
+  }, [status, router])
+
+  const role = session?.user?.role
+  if (role && role !== "ADMIN" && role !== "ENCARGADO") {
+    return <Layout titulo="Nuevo Conductor"><p className="text-gray-400 p-8">Sin permisos.</p></Layout>
+  }
   const [usuarios, setUsuarios] = useState<UsuarioFlota[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")

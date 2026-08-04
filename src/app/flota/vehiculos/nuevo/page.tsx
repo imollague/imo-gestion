@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import Layout from "@/components/Layout"
 import { TIPOS_LICENCIA } from "@/lib/licencias"
 
@@ -17,7 +18,17 @@ const TIPOS = [
 interface TipoDocumento { id: number; nombre: string; diasAlertaDefault: number }
 
 export default function NuevoVehiculoPage() {
+  const { data: session, status } = useSession()
   const router = useRouter()
+
+  useEffect(() => {
+    if (status === "unauthenticated") router.push("/login")
+  }, [status, router])
+
+  const role = session?.user?.role
+  if (role && role !== "ADMIN" && role !== "ENCARGADO") {
+    return <Layout titulo="Nuevo Vehículo"><p className="text-gray-400 p-8">Sin permisos.</p></Layout>
+  }
   const [tiposDocumento, setTiposDocumento] = useState<TipoDocumento[]>([])
   const [vencimientos, setVencimientos] = useState<Record<number, string>>({})
   const [loading, setLoading] = useState(false)

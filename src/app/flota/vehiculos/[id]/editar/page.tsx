@@ -43,9 +43,15 @@ export default function EditarVehiculoPage() {
     observaciones: "",
   })
 
+  const role = session?.user?.role
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login")
   }, [status, router])
+
+  if (role && role !== "ADMIN" && role !== "ENCARGADO") {
+    return <Layout titulo="Editar Vehículo"><p className="text-gray-400 p-8">Sin permisos.</p></Layout>
+  }
 
   useEffect(() => {
     fetch("/api/flota/tipos-documento").then((r) => r.json()).then(setTiposDocumento)
