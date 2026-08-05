@@ -31,10 +31,14 @@ export default function BodegaPage() {
   const [actasPendientes, setActasPendientes] = useState<{ id: number; descripcion: string; creadoPor: { name: string }; createdAt: string; items: { nombre: string; diferencia: number }[] }[]>([])
   const [firmandoActa, setFirmandoActa] = useState<number | null>(null)
   const [actaMsg, setActaMsg] = useState<{ id: number; tipo: "ok" | "error"; texto: string } | null>(null)
+  const [mermasPendientes, setMermasPendientes] = useState<{ id: number; descripcion: string; motivo: string; creadoPor: { name: string }; createdAt: string; items: { nombre: string; cantidad: number; unidad: string }[] }[]>([])
+  const [firmandoMerma, setFirmandoMerma] = useState<number | null>(null)
+  const [mermaMsg, setMermaMsg] = useState<{ id: number; tipo: "ok" | "error"; texto: string } | null>(null)
 
   useEffect(() => {
     fetchProductos()
     fetchActasPendientes()
+    fetchMermasPendientes()
   }, [])
 
   const fetchProductos = async () => {
@@ -48,6 +52,26 @@ export default function BodegaPage() {
   const fetchActasPendientes = async () => {
     const res = await fetch("/api/bodega/inventario")
     if (res.ok) setActasPendientes(await res.json())
+  }
+
+  const fetchMermasPendientes = async () => {
+    const res = await fetch("/api/bodega/merma")
+    if (res.ok) setMermasPendientes(await res.json())
+  }
+
+  const firmarMermaComoJefe = async (actaId: number) => {
+    setFirmandoMerma(actaId)
+    setMermaMsg(null)
+    const res = await fetch(`/api/bodega/merma/${actaId}/jefe`, { method: "POST" })
+    const data = await res.json()
+    setFirmandoMerma(null)
+    if (res.ok) {
+      setMermaMsg({ id: actaId, tipo: "ok", texto: `Merma autorizada. ${data.bajaAplicada} producto(s) dados de baja.` })
+      fetchMermasPendientes()
+      fetchProductos()
+    } else {
+      setMermaMsg({ id: actaId, tipo: "error", texto: data.error || "Error al firmar" })
+    }
   }
 
   const firmarComoJefe = async (actaId: number) => {
@@ -147,6 +171,12 @@ export default function BodegaPage() {
             Toma de Inventario
           </a>
         )}
+        {puedeInventario && (
+          <a href="/bodega/merma/nueva"
+            className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors">
+            Registrar Merma
+          </a>
+        )}
       </div>
 
       {/* Panel actas pendientes de firma del jefe */}
@@ -185,6 +215,50 @@ export default function BodegaPage() {
                     className="shrink-0 bg-amber-600 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-amber-700 disabled:opacity-50 transition-colors"
                   >
                     {firmandoActa === acta.id ? "Firmando..." : "Firmar y aplicar ajustes"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Panel mermas pendientes de autorización */}
+      {esJefe && mermasPendientes.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <h3 className="text-red-800 font-semibold mb-3">
+            Actas de merma pendientes de tu autorización ({mermasPendientes.length})
+          </h3>
+          <div className="space-y-3">
+            {mermasPendientes.map((acta) => (
+              <div key={acta.id} className="bg-white border border-red-100 rounded-lg p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800">{acta.descripcion}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Registrado por: {acta.creadoPor.name} — {new Date(acta.createdAt).toLocaleDateString("es-CL")}
+                    </p>
+                    {acta.items.length > 0 && (
+                      <ul className="mt-2 text-xs text-gray-600 space-y-0.5">
+                        {acta.items.map((item, i) => (
+                          <li key={i}>
+                            {item.nombre}: -{item.cantidad} {item.unidad}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {mermaMsg?.id === acta.id && (
+                      <p className={`text-xs mt-2 ${mermaMsg.tipo === "ok" ? "text-green-700" : "text-red-600"}`}>
+                        {mermaMsg.texto}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => firmarMermaComoJefe(acta.id)}
+                    disabled={firmandoMerma === acta.id}
+                    className="shrink-0 bg-red-600 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+                  >
+                    {firmandoMerma === acta.id ? "Firmando..." : "Autorizar y aplicar baja"}
                   </button>
                 </div>
               </div>

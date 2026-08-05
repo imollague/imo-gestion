@@ -45,6 +45,9 @@ model User {
   actasInventarioCreadaPor        ActaInventario[] @relation("ActasInventarioCreadaPor")
   actasInventarioJefeSeleccionado ActaInventario[] @relation("ActasInventarioJefeSeleccionado")
   actasInventarioFirmadaJefe      ActaInventario[] @relation("ActasInventarioFirmadaJefe")
+  actasMermaCreadaPor             ActaMerma[]      @relation("ActasMermaCreadaPor")
+  actasMermaJefeSeleccionado      ActaMerma[]      @relation("ActasMermaJefeSeleccionado")
+  actasMermaFirmadaJefe           ActaMerma[]      @relation("ActasMermaFirmadaJefe")
 }
 
 // ─── MÓDULO FIRMA ELECTRÓNICA (FirmaGob) ──────────────
@@ -84,6 +87,46 @@ model ActaInventario {
   fechaFirmaJefe DateTime?
 
   items          ActaInventarioItem[]
+}
+
+model ActaMerma {
+  id                    Int       @id @default(autoincrement())
+  modulo                String    // "BODEGA" | "FARMACIA"
+  estado                String    @default("PENDIENTE_JEFE")
+  // PENDIENTE_JEFE: responsable firmó, esperando autorización del jefe
+  // FIRMADA: jefe autorizó y stock descontado
+  // ERROR
+  descripcion           String
+  motivo                String    // "VENCIMIENTO" | "DAÑO" | "PERDIDA" | "USO_INTERNO" | "OTRO"
+  observaciones         String?
+  urlFirmadoResponsable String?
+  urlFirmadoFinal       String?
+  errorMsg              String?
+  createdAt             DateTime  @default(now())
+
+  creadoPorId    Int
+  creadoPor      User      @relation("ActasMermaCreadaPor", fields: [creadoPorId], references: [id])
+  jefeId         Int?
+  jefe           User?     @relation("ActasMermaJefeSeleccionado", fields: [jefeId], references: [id])
+  firmadoJefeId  Int?
+  firmadoJefe    User?     @relation("ActasMermaFirmadaJefe", fields: [firmadoJefeId], references: [id])
+  fechaFirmaJefe DateTime?
+
+  items ActaMermaItem[]
+}
+
+model ActaMermaItem {
+  id            Int       @id @default(autoincrement())
+  actaId        Int
+  acta          ActaMerma @relation(fields: [actaId], references: [id])
+  nombre        String
+  codigo        String
+  unidad        String
+  cantidad      Int       // unidades a dar de baja
+  stockAntes    Int       // stock en sistema al momento del registro
+  observacion   String?
+  productoId    Int?      // ref a ProductoBodega (sin FK para no acoplar)
+  medicamentoId Int?      // ref a Medicamento
 }
 
 model ActaInventarioItem {
@@ -186,6 +229,7 @@ enum TipoMovimiento {
   ENTRADA
   SALIDA
   AJUSTE
+  MERMA
 }
 
 enum TipoDocumento {
@@ -195,6 +239,7 @@ enum TipoDocumento {
   NOTA_DEBITO
   NOTA_CREDITO
   ACTA_DONACION
+  ACTA_MERMA
   SIN_DOCUMENTO
   OTRO
 }
