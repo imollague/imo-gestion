@@ -34,11 +34,15 @@ export default function BodegaPage() {
   const [mermasPendientes, setMermasPendientes] = useState<{ id: number; descripcion: string; motivo: string; creadoPor: { name: string }; createdAt: string; items: { nombre: string; cantidad: number; unidad: string }[] }[]>([])
   const [firmandoMerma, setFirmandoMerma] = useState<number | null>(null)
   const [mermaMsg, setMermaMsg] = useState<{ id: number; tipo: "ok" | "error"; texto: string } | null>(null)
+  const [retirosPendientes, setRetirosPendientes] = useState<{ id: number; descripcion: string; causa: string; destino: string; creadoPor: { name: string }; createdAt: string; items: { nombre: string; cantidad: number; unidad: string; lote: string | null }[] }[]>([])
+  const [firmandoRetiro, setFirmandoRetiro] = useState<number | null>(null)
+  const [retiroMsg, setRetiroMsg] = useState<{ id: number; tipo: "ok" | "error"; texto: string } | null>(null)
 
   useEffect(() => {
     fetchProductos()
     fetchActasPendientes()
     fetchMermasPendientes()
+    fetchRetirosPendientes()
   }, [])
 
   const fetchProductos = async () => {
@@ -57,6 +61,26 @@ export default function BodegaPage() {
   const fetchMermasPendientes = async () => {
     const res = await fetch("/api/bodega/merma")
     if (res.ok) setMermasPendientes(await res.json())
+  }
+
+  const fetchRetirosPendientes = async () => {
+    const res = await fetch("/api/bodega/retiro-sanitario")
+    if (res.ok) setRetirosPendientes(await res.json())
+  }
+
+  const firmarRetiroComoJefe = async (actaId: number) => {
+    setFirmandoRetiro(actaId)
+    setRetiroMsg(null)
+    const res = await fetch(`/api/bodega/retiro-sanitario/${actaId}/jefe`, { method: "POST" })
+    const data = await res.json()
+    setFirmandoRetiro(null)
+    if (res.ok) {
+      setRetiroMsg({ id: actaId, tipo: "ok", texto: `Retiro autorizado. ${data.retiradosAplicados} producto(s) retirado(s) del stock.` })
+      fetchRetirosPendientes()
+      fetchProductos()
+    } else {
+      setRetiroMsg({ id: actaId, tipo: "error", texto: data.error || "Error al firmar" })
+    }
   }
 
   const firmarMermaComoJefe = async (actaId: number) => {
@@ -177,6 +201,12 @@ export default function BodegaPage() {
             Registrar Merma
           </a>
         )}
+        {puedeInventario && (
+          <a href="/bodega/retiro-sanitario/nueva"
+            className="bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-800 transition-colors">
+            Retiro Sanitario
+          </a>
+        )}
       </div>
 
       {/* Panel actas pendientes de firma del jefe */}
@@ -259,6 +289,50 @@ export default function BodegaPage() {
                     className="shrink-0 bg-red-600 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
                   >
                     {firmandoMerma === acta.id ? "Firmando..." : "Autorizar y aplicar baja"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Panel retiros sanitarios pendientes de autorización */}
+      {esJefe && retirosPendientes.length > 0 && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
+          <h3 className="text-orange-800 font-semibold mb-3">
+            Actas de retiro sanitario pendientes de tu autorización ({retirosPendientes.length})
+          </h3>
+          <div className="space-y-3">
+            {retirosPendientes.map((acta) => (
+              <div key={acta.id} className="bg-white border border-orange-100 rounded-lg p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800">{acta.descripcion}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Registrado por: {acta.creadoPor.name} — {new Date(acta.createdAt).toLocaleDateString("es-CL")}
+                    </p>
+                    {acta.items.length > 0 && (
+                      <ul className="mt-2 text-xs text-gray-600 space-y-0.5">
+                        {acta.items.map((item, i) => (
+                          <li key={i}>
+                            {item.nombre}{item.lote ? ` (Lote ${item.lote})` : ""}: -{item.cantidad} {item.unidad}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {retiroMsg?.id === acta.id && (
+                      <p className={`text-xs mt-2 ${retiroMsg.tipo === "ok" ? "text-green-700" : "text-red-600"}`}>
+                        {retiroMsg.texto}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => firmarRetiroComoJefe(acta.id)}
+                    disabled={firmandoRetiro === acta.id}
+                    className="shrink-0 bg-orange-700 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-orange-800 disabled:opacity-50 transition-colors"
+                  >
+                    {firmandoRetiro === acta.id ? "Firmando..." : "Autorizar retiro sanitario"}
                   </button>
                 </div>
               </div>

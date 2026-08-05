@@ -45,9 +45,12 @@ model User {
   actasInventarioCreadaPor        ActaInventario[] @relation("ActasInventarioCreadaPor")
   actasInventarioJefeSeleccionado ActaInventario[] @relation("ActasInventarioJefeSeleccionado")
   actasInventarioFirmadaJefe      ActaInventario[] @relation("ActasInventarioFirmadaJefe")
-  actasMermaCreadaPor             ActaMerma[]      @relation("ActasMermaCreadaPor")
-  actasMermaJefeSeleccionado      ActaMerma[]      @relation("ActasMermaJefeSeleccionado")
-  actasMermaFirmadaJefe           ActaMerma[]      @relation("ActasMermaFirmadaJefe")
+  actasMermaCreadaPor             ActaMerma[]            @relation("ActasMermaCreadaPor")
+  actasMermaJefeSeleccionado      ActaMerma[]            @relation("ActasMermaJefeSeleccionado")
+  actasMermaFirmadaJefe           ActaMerma[]            @relation("ActasMermaFirmadaJefe")
+  actasRetiroCreadaPor            ActaRetiroSanitario[]  @relation("ActasRetiroCreadaPor")
+  actasRetiroJefeSeleccionado     ActaRetiroSanitario[]  @relation("ActasRetiroJefeSeleccionado")
+  actasRetiroFirmadaJefe          ActaRetiroSanitario[]  @relation("ActasRetiroFirmadaJefe")
 }
 
 // ─── MÓDULO FIRMA ELECTRÓNICA (FirmaGob) ──────────────
@@ -59,6 +62,50 @@ model ContadorFolio {
   ultimo  Int    @default(0)
 
   @@unique([modulo, anio])
+}
+
+model ActaRetiroSanitario {
+  id                    Int       @id @default(autoincrement())
+  modulo                String    // "BODEGA" | "FARMACIA"
+  estado                String    @default("PENDIENTE_JEFE")
+  // PENDIENTE_JEFE: responsable firmó, esperando autorización del jefe
+  // FIRMADA: jefe autorizó y stock descontado
+  // ERROR
+  descripcion           String
+  causa                 String    // "ALERTA_ISP" | "CONTAMINACION" | "DEFECTO_FABRICACION" | "ORDEN_AUTORIDAD" | "OTRO"
+  referenciaOficial     String?   // N° resolución, oficio, alerta ISP, etc.
+  destino               String    // "DEVOLUCION_PROVEEDOR" | "DESTRUCCION" | "CUARENTENA" | "OTRO"
+  observaciones         String?
+  urlFirmadoResponsable String?
+  urlFirmadoFinal       String?
+  errorMsg              String?
+  createdAt             DateTime  @default(now())
+
+  creadoPorId    Int
+  creadoPor      User      @relation("ActasRetiroCreadaPor", fields: [creadoPorId], references: [id])
+  jefeId         Int?
+  jefe           User?     @relation("ActasRetiroJefeSeleccionado", fields: [jefeId], references: [id])
+  firmadoJefeId  Int?
+  firmadoJefe    User?     @relation("ActasRetiroFirmadaJefe", fields: [firmadoJefeId], references: [id])
+  fechaFirmaJefe DateTime?
+
+  items ActaRetiroSanitarioItem[]
+}
+
+model ActaRetiroSanitarioItem {
+  id               Int                 @id @default(autoincrement())
+  actaId           Int
+  acta             ActaRetiroSanitario @relation(fields: [actaId], references: [id])
+  nombre           String
+  codigo           String
+  unidad           String
+  lote             String?             // número de lote retirado
+  fechaVencimiento DateTime?
+  cantidad         Int
+  stockAntes       Int
+  observacion      String?
+  productoId       Int?                // ref a ProductoBodega (sin FK)
+  medicamentoId    Int?                // ref a Medicamento (sin FK)
 }
 
 model ActaInventario {
@@ -230,6 +277,7 @@ enum TipoMovimiento {
   SALIDA
   AJUSTE
   MERMA
+  RETIRO_SANITARIO
 }
 
 enum TipoDocumento {
@@ -240,6 +288,7 @@ enum TipoDocumento {
   NOTA_CREDITO
   ACTA_DONACION
   ACTA_MERMA
+  ACTA_RETIRO_SANITARIO
   SIN_DOCUMENTO
   OTRO
 }
