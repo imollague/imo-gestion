@@ -116,6 +116,10 @@ export interface FirmaResult {
 export async function firmarDocumentoAtendido({
   rutFirmante, otp, pdfBase64, descripcion, layoutXml,
 }: FirmaAtendidaParams): Promise<FirmaResult> {
+  if (process.env.SKIP_FIRMA === 'true') {
+    console.warn(`[firmagob] SKIP_FIRMA activo — documento NO firmado (${descripcion}, rut ${rutFirmante})`)
+    return { ok: true, pdfFirmadoBase64: pdfBase64, checksumOriginal: 'skip', checksumFirmado: 'skip', idSolicitud: 'SKIP' }
+  }
   const token = generarToken(rutFirmante, process.env.FIRMAGOB_PURPOSE ?? 'Propósito General')
   const checksum = checksumBase64(pdfBase64)
   const file: Record<string, string> = {
@@ -136,6 +140,10 @@ export async function firmarDocumentoAtendido({
 export async function firmarDocumentoDesatendido({
   rutFirmante, pdfBase64, descripcion,
 }: FirmaDesatendidaParams): Promise<FirmaResult> {
+  if (process.env.SKIP_FIRMA === 'true') {
+    console.warn(`[firmagob] SKIP_FIRMA activo — documento NO firmado (${descripcion}, rut ${rutFirmante})`)
+    return { ok: true, pdfFirmadoBase64: pdfBase64, checksumOriginal: 'skip', checksumFirmado: 'skip', idSolicitud: 'SKIP' }
+  }
   const token = generarToken(rutFirmante, 'Desatendido')
   const checksum = checksumBase64(pdfBase64)
 
