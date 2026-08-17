@@ -408,12 +408,35 @@ model LoteFarmacia {
 // ─── MÓDULO FLOTA ──────────────────────────────────────
 
 enum TipoVehiculo {
+  AUTOMOVIL
+  STATION_WAGON
+  TODO_TERRENO
   CAMIONETA
-  SEDAN
-  CAMION
-  MAQUINARIA
+  FURGON
+  MINIBUS
   BUS
+  CAMION
+  MOTOCICLETA
+  CARRO_ARRASTRE
+  MAQUINARIA
   OTRO
+}
+
+enum UsoMunicipal {
+  AMBULANCIA
+  ALJIBE
+  RECOLECTOR_RESIDUOS
+  TRANSPORTE_PERSONAL
+  OPERATIVO_TERRENO
+  EMERGENCIA
+  ADMINISTRATIVO
+  OBRAS
+  OTRO
+}
+
+enum UnidadMedidaUso {
+  KILOMETROS
+  HORAS
 }
 
 enum EstadoVehiculo {
@@ -438,19 +461,23 @@ enum TipoMantencion {
 }
 
 model Vehiculo {
-  id                    Int            @id @default(autoincrement())
-  patente               String         @unique
+  id                    Int              @id @default(autoincrement())
+  patente               String?          @unique
+  numeroInterno         String?
   marca                 String
   modelo                String
   anio                  Int
   tipo                  TipoVehiculo
-  estado                EstadoVehiculo @default(OPERATIVO)
-  kmActual              Int            @default(0)
-  licenciasPermitidas   String[]       @default([]) // vacío = sin restricción de licencia
+  usoMunicipal          UsoMunicipal?
+  estado                EstadoVehiculo   @default(OPERATIVO)
+  unidadMedidaUso       UnidadMedidaUso  @default(KILOMETROS)
+  kmActual              Int              @default(0)
+  horasUso              Int              @default(0)
+  licenciasPermitidas   String[]         @default([]) // vacío = sin restricción de licencia
   observaciones         String?
   imagenUrl             String?
-  activo                Boolean        @default(true)
-  createdAt             DateTime       @default(now())
+  activo                Boolean          @default(true)
+  createdAt             DateTime         @default(now())
 
   solicitudes   SolicitudVehiculo[]
   mantenciones  MantencionVehiculo[]
