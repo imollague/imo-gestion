@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import Layout from "@/components/Layout"
 import BotonExportar from "@/components/BotonExportar"
 
@@ -19,13 +21,30 @@ interface Medicamento {
 }
 
 export default function FarmaciaPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
+  useEffect(() => {
+    if (status === "unauthenticated") router.push("/login")
+  }, [status, router])
   const [medicamentos, setMedicamentos] = useState<Medicamento[]>([])
   const [busqueda, setBusqueda] = useState("")
   const [filtroCategoria, setFiltroCategoria] = useState("")
   const [loading, setLoading] = useState(true)
+  const [actasPendientes, setActasPendientes] = useState<{ id: number; descripcion: string; creadoPor: { name: string }; createdAt: string; items: { nombre: string; diferencia: number }[] }[]>([])
+  const [firmandoActa, setFirmandoActa] = useState<number | null>(null)
+  const [actaMsg, setActaMsg] = useState<{ id: number; tipo: "ok" | "error"; texto: string } | null>(null)
+  const [mermasPendientes, setMermasPendientes] = useState<{ id: number; descripcion: string; motivo: string; creadoPor: { name: string }; createdAt: string; items: { nombre: string; cantidad: number; unidad: string }[] }[]>([])
+  const [firmandoMerma, setFirmandoMerma] = useState<number | null>(null)
+  const [mermaMsg, setMermaMsg] = useState<{ id: number; tipo: "ok" | "error"; texto: string } | null>(null)
+  const [retirosPendientes, setRetirosPendientes] = useState<{ id: number; descripcion: string; causa: string; destino: string; creadoPor: { name: string }; createdAt: string; items: { nombre: string; cantidad: number; unidad: string; lote: string | null }[] }[]>([])
+  const [firmandoRetiro, setFirmandoRetiro] = useState<number | null>(null)
+  const [retiroMsg, setRetiroMsg] = useState<{ id: number; tipo: "ok" | "error"; texto: string } | null>(null)
 
   useEffect(() => {
     fetchMedicamentos()
+    fetchActasPendientes()
+    fetchMermasPendientes()
+    fetchRetirosPendientes()
   }, [])
 
   const fetchMedicamentos = async () => {
@@ -34,6 +53,65 @@ export default function FarmaciaPage() {
     const data = await res.json()
     setMedicamentos(data)
     setLoading(false)
+  }
+
+  const fetchActasPendientes = async () => {
+    const res = await fetch("/api/farmacia/inventario")
+    if (res.ok) setActasPendientes(await res.json())
+  }
+
+  const fetchMermasPendientes = async () => {
+    const res = await fetch("/api/farmacia/merma")
+    if (res.ok) setMermasPendientes(await res.json())
+  }
+
+  const fetchRetirosPendientes = async () => {
+    const res = await fetch("/api/farmacia/retiro-sanitario")
+    if (res.ok) setRetirosPendientes(await res.json())
+  }
+
+  const firmarRetiroComoJefe = async (actaId: number) => {
+    setFirmandoRetiro(actaId)
+    setRetiroMsg(null)
+    const res = await fetch(`/api/farmacia/retiro-sanitario/${actaId}/jefe`, { method: "POST" })
+    const data = await res.json()
+    setFirmandoRetiro(null)
+    if (res.ok) {
+      setRetiroMsg({ id: actaId, tipo: "ok", texto: `Retiro autorizado. ${data.retiradosAplicados} medicamento(s) retirado(s) del stock.` })
+      fetchRetirosPendientes()
+      fetchMedicamentos()
+    } else {
+      setRetiroMsg({ id: actaId, tipo: "error", texto: data.error || "Error al firmar" })
+    }
+  }
+
+  const firmarMermaComoJefe = async (actaId: number) => {
+    setFirmandoMerma(actaId)
+    setMermaMsg(null)
+    const res = await fetch(`/api/farmacia/merma/${actaId}/jefe`, { method: "POST" })
+    const data = await res.json()
+    setFirmandoMerma(null)
+    if (res.ok) {
+      setMermaMsg({ id: actaId, tipo: "ok", texto: `Merma autorizada. ${data.bajaAplicada} medicamento(s) dados de baja.` })
+      fetchMermasPendientes()
+      fetchMedicamentos()
+    } else {
+      setMermaMsg({ id: actaId, tipo: "error", texto: data.error || "Error al firmar" })
+    }
+  }
+
+  const firmarComoJefe = async (actaId: number) => {
+    setFirmandoActa(actaId)
+    setActaMsg(null)
+    const res = await fetch(`/api/farmacia/inventario/${actaId}/jefe`, { method: "POST" })
+    const data = await res.json()
+    setFirmandoActa(null)
+    if (res.ok) {
+      setActaMsg({ id: actaId, tipo: "ok", texto: `Acta firmada. ${data.ajustesAplicados} ajuste(s) de stock aplicados.` })
+      fetchActasPendientes()
+    } else {
+      setActaMsg({ id: actaId, tipo: "error", texto: data.error || "Error al firmar" })
+    }
   }
 
   // Categorias unicas para el select
@@ -52,6 +130,10 @@ export default function FarmaciaPage() {
   })
 
   const stockBajo = medicamentos.filter((m) => m.stockActual <= m.stockMinimo)
+
+  const role = session?.user?.role
+  const puedeInventario = role === "ADMIN" || role === "FARMACIA"
+  const esJefe = role === "ADMIN"
 
   return (
     <Layout titulo="Farmacia — Posta Rural">
@@ -110,7 +192,157 @@ export default function FarmaciaPage() {
             { header: "Estado", key: "estado", ancho: 12 },
           ]}
         />
+        {puedeInventario && (
+          <a href="/farmacia/inventario/nuevo"
+            className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors">
+            Toma de Inventario
+          </a>
+        )}
+        {puedeInventario && (
+          <a href="/farmacia/merma/nueva"
+            className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors">
+            Registrar Merma
+          </a>
+        )}
+        {puedeInventario && (
+          <a href="/farmacia/retiro-sanitario/nueva"
+            className="bg-orange-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-800 transition-colors">
+            Retiro Sanitario
+          </a>
+        )}
       </div>
+
+      {/* Panel actas pendientes de firma del jefe */}
+      {esJefe && actasPendientes.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+          <h3 className="text-amber-800 font-semibold mb-3">
+            Actas de inventario pendientes de tu firma ({actasPendientes.length})
+          </h3>
+          <div className="space-y-3">
+            {actasPendientes.map((acta) => (
+              <div key={acta.id} className="bg-white border border-amber-100 rounded-lg p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800">{acta.descripcion}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Realizado por: {acta.creadoPor.name} — {new Date(acta.createdAt).toLocaleDateString("es-CL")}
+                    </p>
+                    {acta.items.length > 0 && (
+                      <ul className="mt-2 text-xs text-gray-600 space-y-0.5">
+                        {acta.items.map((item, i) => (
+                          <li key={i}>
+                            {item.nombre}: diferencia de {item.diferencia > 0 ? "+" : ""}{item.diferencia} unidades
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {actaMsg?.id === acta.id && (
+                      <p className={`text-xs mt-2 ${actaMsg.tipo === "ok" ? "text-green-700" : "text-red-600"}`}>
+                        {actaMsg.texto}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => firmarComoJefe(acta.id)}
+                    disabled={firmandoActa === acta.id}
+                    className="shrink-0 bg-amber-600 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                  >
+                    {firmandoActa === acta.id ? "Firmando..." : "Firmar y aplicar ajustes"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Panel mermas pendientes de autorización */}
+      {esJefe && mermasPendientes.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <h3 className="text-red-800 font-semibold mb-3">
+            Actas de merma pendientes de tu autorización ({mermasPendientes.length})
+          </h3>
+          <div className="space-y-3">
+            {mermasPendientes.map((acta) => (
+              <div key={acta.id} className="bg-white border border-red-100 rounded-lg p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800">{acta.descripcion}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Registrado por: {acta.creadoPor.name} — {new Date(acta.createdAt).toLocaleDateString("es-CL")}
+                    </p>
+                    {acta.items.length > 0 && (
+                      <ul className="mt-2 text-xs text-gray-600 space-y-0.5">
+                        {acta.items.map((item, i) => (
+                          <li key={i}>
+                            {item.nombre}: -{item.cantidad} {item.unidad}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {mermaMsg?.id === acta.id && (
+                      <p className={`text-xs mt-2 ${mermaMsg.tipo === "ok" ? "text-green-700" : "text-red-600"}`}>
+                        {mermaMsg.texto}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => firmarMermaComoJefe(acta.id)}
+                    disabled={firmandoMerma === acta.id}
+                    className="shrink-0 bg-red-600 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+                  >
+                    {firmandoMerma === acta.id ? "Firmando..." : "Autorizar y aplicar baja"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Panel retiros sanitarios pendientes de autorización */}
+      {esJefe && retirosPendientes.length > 0 && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
+          <h3 className="text-orange-800 font-semibold mb-3">
+            Actas de retiro sanitario pendientes de tu autorización ({retirosPendientes.length})
+          </h3>
+          <div className="space-y-3">
+            {retirosPendientes.map((acta) => (
+              <div key={acta.id} className="bg-white border border-orange-100 rounded-lg p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800">{acta.descripcion}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Registrado por: {acta.creadoPor.name} — {new Date(acta.createdAt).toLocaleDateString("es-CL")}
+                    </p>
+                    {acta.items.length > 0 && (
+                      <ul className="mt-2 text-xs text-gray-600 space-y-0.5">
+                        {acta.items.map((item, i) => (
+                          <li key={i}>
+                            {item.nombre}{item.lote ? ` (Lote ${item.lote})` : ""}: -{item.cantidad} {item.unidad}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {retiroMsg?.id === acta.id && (
+                      <p className={`text-xs mt-2 ${retiroMsg.tipo === "ok" ? "text-green-700" : "text-red-600"}`}>
+                        {retiroMsg.texto}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => firmarRetiroComoJefe(acta.id)}
+                    disabled={firmandoRetiro === acta.id}
+                    className="shrink-0 bg-orange-700 text-white px-3 py-1.5 rounded text-xs font-medium hover:bg-orange-800 disabled:opacity-50 transition-colors"
+                  >
+                    {firmandoRetiro === acta.id ? "Firmando..." : "Autorizar retiro sanitario"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Buscador y filtro categoria */}
       <div className="flex gap-3 mb-4">
