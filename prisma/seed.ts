@@ -1,4 +1,6 @@
 import 'dotenv/config'
+import { config } from 'dotenv'
+config({ path: '.env.local', override: true })
 import { PrismaPg } from "@prisma/adapter-pg"
 import { PrismaClient } from "../src/generated/prisma/client"
 import bcrypt from "bcryptjs"

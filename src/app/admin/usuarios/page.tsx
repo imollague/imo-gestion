@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { useEffect, useState } from "react"
 import Layout from "@/components/Layout"
@@ -8,6 +8,7 @@ interface Usuario {
   id: number
   username: string
   name: string
+  rut: string | null
   role: Role
   roleAnterior: Role | null
   roleExpiration: string | null
@@ -22,28 +23,27 @@ export default function UsuariosPage() {
   const [exito, setExito] = useState("")
   const [guardando, setGuardando] = useState(false)
   const [mostrarForm, setMostrarForm] = useState(false)
+
   const [usuarioReset, setUsuarioReset] = useState<Usuario | null>(null)
   const [nuevaPassword, setNuevaPassword] = useState("")
   const [errorReset, setErrorReset] = useState("")
   const [guardandoReset, setGuardandoReset] = useState(false)
 
-  // Estado para modal de rol temporal
   const [usuarioRolTemporal, setUsuarioRolTemporal] = useState<Usuario | null>(null)
   const [rolTemporal, setRolTemporal] = useState("")
   const [fechaExpiracion, setFechaExpiracion] = useState("")
   const [esTemporal, setEsTemporal] = useState(false)
   const [guardandoRol, setGuardandoRol] = useState(false)
 
+  const [usuarioRut, setUsuarioRut] = useState<Usuario | null>(null)
+  const [rutInput, setRutInput] = useState("")
+  const [guardandoRut, setGuardandoRut] = useState(false)
+
   const [form, setForm] = useState({
-    username: "",
-    name: "",
-    role: "BODEGA",
-    password: "",
+    username: "", name: "", role: "BODEGA", password: "", rut: "",
   })
 
-  useEffect(() => {
-    fetchUsuarios()
-  }, [])
+  useEffect(() => { fetchUsuarios() }, [])
 
   const fetchUsuarios = async () => {
     setLoading(true)
@@ -57,11 +57,11 @@ export default function UsuariosPage() {
     setError("")
     setExito("")
     if (!form.username || !form.name || !form.password) {
-      setError("Usuario, nombre y contrasena son obligatorios")
+      setError("Usuario, nombre y contraseña son obligatorios")
       return
     }
     if (form.password.length < 6) {
-      setError("La contrasena debe tener al menos 6 caracteres")
+      setError("La contraseña debe tener al menos 6 caracteres")
       return
     }
     setGuardando(true)
@@ -77,7 +77,7 @@ export default function UsuariosPage() {
       return
     }
     setExito(`Usuario "${form.name}" creado correctamente`)
-    setForm({ username: "", name: "", role: "BODEGA", password: "" })
+    setForm({ username: "", name: "", role: "BODEGA", password: "", rut: "" })
     setMostrarForm(false)
     fetchUsuarios()
     setGuardando(false)
@@ -105,7 +105,7 @@ export default function UsuariosPage() {
   const handleGuardarRol = async () => {
     if (!usuarioRolTemporal) return
     if (esTemporal && !fechaExpiracion) {
-      alert("Debes seleccionar una fecha de expiracion")
+      alert("Debes seleccionar una fecha de expiración")
       return
     }
     setGuardandoRol(true)
@@ -130,7 +130,7 @@ export default function UsuariosPage() {
   const handleResetPassword = async () => {
     setErrorReset("")
     if (!nuevaPassword || nuevaPassword.length < 6) {
-      setErrorReset("La contrasena debe tener al menos 6 caracteres")
+      setErrorReset("La contraseña debe tener al menos 6 caracteres")
       return
     }
     setGuardandoReset(true)
@@ -141,34 +141,50 @@ export default function UsuariosPage() {
     })
     const data = await res.json()
     if (!res.ok) {
-      setErrorReset(data.error || "Error al cambiar contrasena")
+      setErrorReset(data.error || "Error al cambiar contraseña")
       setGuardandoReset(false)
       return
     }
     setGuardandoReset(false)
     setUsuarioReset(null)
     setNuevaPassword("")
-    setExito(`Contrasena de "${usuarioReset!.name}" actualizada correctamente`)
+    setExito(`Contraseña de "${usuarioReset!.name}" actualizada correctamente`)
     setTimeout(() => setExito(""), 3000)
   }
 
-  const formatFecha = (fecha: string) =>
-    new Date(fecha).toLocaleDateString("es-CL", {
-      day: "2-digit", month: "2-digit", year: "numeric",
+  const abrirModalRut = (usuario: Usuario) => {
+    setUsuarioRut(usuario)
+    setRutInput(usuario.rut ?? "")
+  }
+
+  const handleGuardarRut = async () => {
+    if (!usuarioRut) return
+    setGuardandoRut(true)
+    const res = await fetch("/api/admin/usuarios", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: usuarioRut.id, rut: rutInput }),
     })
+    if (res.ok) {
+      setUsuarioRut(null)
+      fetchUsuarios()
+      setExito(`RUT de "${usuarioRut.name}" actualizado`)
+      setTimeout(() => setExito(""), 3000)
+    }
+    setGuardandoRut(false)
+  }
+
+  const formatFecha = (fecha: string) =>
+    new Date(fecha).toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" })
 
   const rolLabel = (role: string) => ROLE_LABELS[role as Role] ?? role
 
   return (
-    <Layout titulo="Administracion de Usuarios">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <Layout titulo="Administración de Usuarios">
+      <div className="max-w-5xl mx-auto space-y-6">
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">{error}</div>
-        )}
-        {exito && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-green-700 text-sm">{exito}</div>
-        )}
+        {error && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">{error}</div>}
+        {exito && <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-green-700 text-sm">{exito}</div>}
 
         <div className="flex justify-between items-center">
           <p className="text-sm text-gray-500">{usuarios.length} usuario(s) registrado(s)</p>
@@ -197,14 +213,14 @@ export default function UsuariosPage() {
                 <input type="text" value={form.username}
                   onChange={(e) => setForm((f) => ({ ...f, username: e.target.value.toLowerCase() }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Sin espacios ni mayusculas" />
+                  placeholder="Sin espacios ni mayúsculas" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Contrasena</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
                 <input type="password" value={form.password}
                   onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Minimo 6 caracteres" />
+                  placeholder="Mínimo 6 caracteres" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Rol</label>
@@ -212,6 +228,15 @@ export default function UsuariosPage() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                   {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  RUT <span className="text-gray-400 font-normal">(para firma electrónica FirmaGob)</span>
+                </label>
+                <input type="text" value={form.rut}
+                  onChange={(e) => setForm((f) => ({ ...f, rut: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ej: 12.345.678-9 — solo necesario para quienes firman documentos" />
               </div>
             </div>
             <button onClick={handleCrear} disabled={guardando}
@@ -231,6 +256,7 @@ export default function UsuariosPage() {
                 <tr>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Nombre</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Usuario</th>
+                  <th className="text-left px-4 py-3 text-gray-600 font-medium">RUT</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Rol</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Creado</th>
                   <th className="text-center px-4 py-3 text-gray-600 font-medium">Estado</th>
@@ -242,17 +268,20 @@ export default function UsuariosPage() {
                   <tr key={u.id} className={`hover:bg-gray-50 ${!u.active ? "opacity-50" : ""}`}>
                     <td className="px-4 py-3 font-medium text-gray-800">{u.name}</td>
                     <td className="px-4 py-3 font-mono text-gray-600">{u.username}</td>
+                    <td className="px-4 py-3 font-mono text-gray-600">
+                      {u.rut
+                        ? <span>{u.rut}</span>
+                        : <span className="text-xs text-gray-400 italic">Sin RUT</span>
+                      }
+                    </td>
                     <td className="px-4 py-3">
-                      <div>
-                        <span className="text-gray-800 font-medium text-xs">{rolLabel(u.role)}</span>
-                        {u.roleAnterior && u.roleExpiration && (
-                          <p className="text-xs text-orange-500 mt-0.5">
-                            Temporal hasta {formatFecha(u.roleExpiration)}
-                            <br />
-                            <span className="text-gray-400">Vuelve a: {rolLabel(u.roleAnterior)}</span>
-                          </p>
-                        )}
-                      </div>
+                      <span className="text-gray-800 font-medium text-xs">{rolLabel(u.role)}</span>
+                      {u.roleAnterior && u.roleExpiration && (
+                        <p className="text-xs text-orange-500 mt-0.5">
+                          Temporal hasta {formatFecha(u.roleExpiration)}<br />
+                          <span className="text-gray-400">Vuelve a: {rolLabel(u.roleAnterior)}</span>
+                        </p>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">{formatFecha(u.createdAt)}</td>
                     <td className="px-4 py-3 text-center">
@@ -264,14 +293,15 @@ export default function UsuariosPage() {
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex justify-center gap-3">
-                        <button onClick={() => abrirModalRol(u)}
-                          className="text-blue-500 text-xs hover:underline">
+                        <button onClick={() => abrirModalRol(u)} className="text-blue-500 text-xs hover:underline">
                           Cambiar rol
                         </button>
-                        <button
-                          onClick={() => { setUsuarioReset(u); setNuevaPassword(""); setErrorReset("") }}
+                        <button onClick={() => abrirModalRut(u)} className="text-blue-500 text-xs hover:underline">
+                          Editar RUT
+                        </button>
+                        <button onClick={() => { setUsuarioReset(u); setNuevaPassword(""); setErrorReset("") }}
                           className="text-blue-500 text-xs hover:underline">
-                          Cambiar contrasena
+                          Cambiar contraseña
                         </button>
                         <button onClick={() => handleToggleActivo(u)}
                           className={`text-xs hover:underline ${u.active ? "text-red-500" : "text-green-600"}`}>
@@ -293,7 +323,6 @@ export default function UsuariosPage() {
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4">
             <h3 className="text-lg font-semibold text-gray-800">Cambiar rol</h3>
             <p className="text-sm text-gray-500">Usuario: <span className="font-medium">{usuarioRolTemporal.name}</span></p>
-
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Nuevo rol</label>
               <select value={rolTemporal} onChange={(e) => setRolTemporal(e.target.value)}
@@ -301,14 +330,11 @@ export default function UsuariosPage() {
                 {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
             </div>
-
             <div className="flex items-center gap-2">
               <input type="checkbox" id="esTemporal" checked={esTemporal}
-                onChange={(e) => setEsTemporal(e.target.checked)}
-                className="rounded border-gray-300" />
+                onChange={(e) => setEsTemporal(e.target.checked)} className="rounded border-gray-300" />
               <label htmlFor="esTemporal" className="text-sm text-gray-700">Es un cambio temporal (subrogancia)</label>
             </div>
-
             {esTemporal && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de retorno al rol original</label>
@@ -317,16 +343,11 @@ export default function UsuariosPage() {
                   min={new Date().toISOString().split("T")[0]}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 {usuarioRolTemporal.roleAnterior && (
-                  <p className="text-xs text-gray-400 mt-1">
-                    Rol original: {rolLabel(usuarioRolTemporal.roleAnterior)}
-                  </p>
+                  <p className="text-xs text-gray-400 mt-1">Rol original: {rolLabel(usuarioRolTemporal.roleAnterior)}</p>
                 )}
-                <p className="text-xs text-orange-500 mt-1">
-                  El sistema revertira automaticamente el rol al original en esa fecha
-                </p>
+                <p className="text-xs text-orange-500 mt-1">El sistema revertirá automáticamente el rol al original en esa fecha</p>
               </div>
             )}
-
             <div className="flex gap-3 pt-2">
               <button onClick={handleGuardarRol} disabled={guardandoRol}
                 className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors">
@@ -341,19 +362,48 @@ export default function UsuariosPage() {
         </div>
       )}
 
-      {/* Modal reset contrasena */}
+      {/* Modal editar RUT */}
+      {usuarioRut && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-800">Editar RUT</h3>
+            <p className="text-sm text-gray-500">Usuario: <span className="font-medium">{usuarioRut.name}</span></p>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">RUT</label>
+              <input type="text" value={rutInput}
+                onChange={(e) => setRutInput(e.target.value)}
+                autoFocus
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Ej: 12.345.678-9" />
+              <p className="text-xs text-gray-400 mt-1">Necesario para que el usuario pueda firmar documentos con FirmaGob</p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={handleGuardarRut} disabled={guardandoRut}
+                className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                {guardandoRut ? "Guardando..." : "Guardar RUT"}
+              </button>
+              <button onClick={() => setUsuarioRut(null)}
+                className="px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal reset contraseña */}
       {usuarioReset && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-1">Cambiar contrasena</h3>
+            <h3 className="text-lg font-semibold text-gray-800 mb-1">Cambiar contraseña</h3>
             <p className="text-sm text-gray-500 mb-4">Usuario: <span className="font-medium">{usuarioReset.name}</span></p>
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nueva contrasena</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nueva contraseña</label>
               <input type="password" value={nuevaPassword}
                 onChange={(e) => setNuevaPassword(e.target.value)}
                 autoFocus
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Minimo 6 caracteres" />
+                placeholder="Mínimo 6 caracteres" />
             </div>
             {errorReset && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm mb-4">{errorReset}</div>
@@ -361,7 +411,7 @@ export default function UsuariosPage() {
             <div className="flex gap-3">
               <button onClick={handleResetPassword} disabled={guardandoReset || !nuevaPassword}
                 className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                {guardandoReset ? "Guardando..." : "Guardar contrasena"}
+                {guardandoReset ? "Guardando..." : "Guardar contraseña"}
               </button>
               <button onClick={() => setUsuarioReset(null)}
                 className="px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">
