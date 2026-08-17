@@ -26,13 +26,17 @@ interface Vehiculo {
 }
 
 const TIPO_LABEL: Record<string, string> = {
+  AUTOMOVIL: "Automóvil",
+  STATION_WAGON: "Station Wagon",
+  TODO_TERRENO: "Todo Terreno",
   CAMIONETA: "Camioneta",
-  SEDAN: "Sedán",
+  FURGON: "Furgón",
+  MOTOCICLETA: "Motocicleta",
+  MINIBUS: "Minibus",
+  BUS: "Bus",
   CAMION: "Camión",
-  CAMION_LIVIANO: "Camión",
-  CAMION_PESADO: "Camión",
   MAQUINARIA: "Maquinaria",
-  BUS: "Bus / Minibus",
+  CARRO_ARRASTRE: "Carro Arrastre",
   OTRO: "Otro",
 }
 

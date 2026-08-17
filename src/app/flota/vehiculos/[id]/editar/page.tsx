@@ -5,13 +5,38 @@ import { useRouter, useParams } from "next/navigation"
 import { useSession } from "next-auth/react"
 import Layout from "@/components/Layout"
 import { TIPOS_LICENCIA } from "@/lib/licencias"
+import { MAQUINARIA_TIPOS } from "@/lib/vehiculoUtils"
 
-const TIPOS = [
-  { value: "CAMIONETA", label: "Camioneta" },
-  { value: "SEDAN", label: "Sedán" },
-  { value: "CAMION", label: "Camión" },
-  { value: "MAQUINARIA", label: "Maquinaria" },
-  { value: "BUS", label: "Bus / Minibus" },
+const TIPOS_VEHICULO = [
+  { group: "Livianos", items: [
+    { value: "AUTOMOVIL", label: "Automóvil" },
+    { value: "STATION_WAGON", label: "Station Wagon" },
+    { value: "TODO_TERRENO", label: "Todo Terreno / SUV" },
+    { value: "CAMIONETA", label: "Camioneta" },
+    { value: "FURGON", label: "Furgón" },
+    { value: "MOTOCICLETA", label: "Motocicleta" },
+  ]},
+  { group: "Pesados", items: [
+    { value: "MINIBUS", label: "Minibus" },
+    { value: "BUS", label: "Bus" },
+    { value: "CAMION", label: "Camión" },
+  ]},
+  { group: "Maquinaria / Remolques", items: [
+    { value: "MAQUINARIA", label: "Maquinaria" },
+    { value: "CARRO_ARRASTRE", label: "Carro de Arrastre" },
+    { value: "OTRO", label: "Otro" },
+  ]},
+]
+
+const USOS_MUNICIPALES = [
+  { value: "AMBULANCIA", label: "Ambulancia" },
+  { value: "ALJIBE", label: "Aljibe" },
+  { value: "RECOLECTOR_RESIDUOS", label: "Recolector de residuos" },
+  { value: "TRANSPORTE_PERSONAL", label: "Transporte de personal" },
+  { value: "OPERATIVO_TERRENO", label: "Operativo en terreno" },
+  { value: "EMERGENCIA", label: "Emergencia" },
+  { value: "ADMINISTRATIVO", label: "Administrativo" },
+  { value: "OBRAS", label: "Obras" },
   { value: "OTRO", label: "Otro" },
 ]
 
@@ -39,8 +64,9 @@ export default function EditarVehiculoPage() {
   const [vencimientos, setVencimientos] = useState<Record<number, string>>({})
   const [licencias, setLicencias] = useState<string[]>([])
   const [form, setForm] = useState({
-    patente: "", marca: "", modelo: "", anio: "", tipo: "", estado: "", kmActual: "",
-    observaciones: "",
+    patente: "", numeroInterno: "", marca: "", modelo: "", anio: "", tipo: "",
+    estado: "", usoMunicipal: "", unidadMedidaUso: "KILOMETROS",
+    kmActual: "", horasUso: "", observaciones: "",
   })
 
   const role = session?.user?.role
@@ -64,12 +90,16 @@ export default function EditarVehiculoPage() {
         .then((v) => {
           setForm({
             patente: v.patente ?? "",
+            numeroInterno: v.numeroInterno ?? "",
             marca: v.marca ?? "",
             modelo: v.modelo ?? "",
             anio: String(v.anio ?? ""),
             tipo: v.tipo ?? "",
             estado: v.estado ?? "",
+            usoMunicipal: v.usoMunicipal ?? "",
+            unidadMedidaUso: v.unidadMedidaUso ?? "KILOMETROS",
             kmActual: String(v.kmActual ?? 0),
+            horasUso: String(v.horasUso ?? 0),
             observaciones: v.observaciones ?? "",
           })
           setLicencias(v.licenciasPermitidas ?? [])
@@ -81,8 +111,17 @@ export default function EditarVehiculoPage() {
   }, [session, id])
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }))
+
+  const setTipo = (v: string) => {
+    const isMaq = MAQUINARIA_TIPOS.includes(v)
+    setForm((f) => ({ ...f, tipo: v, unidadMedidaUso: isMaq ? "HORAS" : f.unidadMedidaUso }))
+  }
+
   const toggleLicencia = (v: string) =>
     setLicencias((l) => (l.includes(v) ? l.filter((x) => x !== v) : [...l, v]))
+
+  const esMaquinaria = MAQUINARIA_TIPOS.includes(form.tipo)
+  const usaHoras = form.unidadMedidaUso === "HORAS"
 
   const handleSubmit = async () => {
     setError("")
@@ -96,6 +135,9 @@ export default function EditarVehiculoPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...form,
+        patente: form.patente || null,
+        numeroInterno: form.numeroInterno || null,
+        usoMunicipal: form.usoMunicipal || null,
         observaciones: form.observaciones || null,
         licenciasPermitidas: licencias,
         vencimientos: vencimientosAEnviar,
@@ -117,18 +159,65 @@ export default function EditarVehiculoPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Patente</label>
-              <input
-                value={form.patente}
-                onChange={(e) => set("patente", e.target.value.toUpperCase())}
-                className="w-full border rounded-lg px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-300"
-              />
-            </div>
-            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
-              <select value={form.tipo} onChange={(e) => set("tipo", e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
-                {TIPOS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              <select
+                value={form.tipo}
+                onChange={(e) => setTipo(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              >
+                <option value="">Seleccionar...</option>
+                {TIPOS_VEHICULO.map((g) => (
+                  <optgroup key={g.group} label={g.group}>
+                    {g.items.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">Copia el tipo tal como aparece en el certificado de inscripción (padrón)</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
+              <select
+                value={form.estado}
+                onChange={(e) => set("estado", e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              >
+                {ESTADOS.map((e) => <option key={e.value} value={e.value}>{e.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            {esMaquinaria ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Número interno</label>
+                <input
+                  value={form.numeroInterno}
+                  onChange={(e) => set("numeroInterno", e.target.value.toUpperCase())}
+                  placeholder="MAQ-001"
+                  className="w-full border rounded-lg px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-300"
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Patente</label>
+                <input
+                  value={form.patente}
+                  onChange={(e) => set("patente", e.target.value.toUpperCase())}
+                  className="w-full border rounded-lg px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-300"
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Uso municipal</label>
+              <select
+                value={form.usoMunicipal}
+                onChange={(e) => set("usoMunicipal", e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              >
+                <option value="">Sin clasificar</option>
+                {USOS_MUNICIPALES.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
               </select>
             </div>
           </div>
@@ -136,34 +225,54 @@ export default function EditarVehiculoPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Marca</label>
-              <input value={form.marca} onChange={(e) => set("marca", e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+              <input
+                value={form.marca}
+                onChange={(e) => set("marca", e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Modelo</label>
-              <input value={form.modelo} onChange={(e) => set("modelo", e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+              <input
+                value={form.modelo}
+                onChange={(e) => set("modelo", e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              />
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Año</label>
-              <input type="number" value={form.anio} onChange={(e) => set("anio", e.target.value)}
+              <input
+                type="number"
+                value={form.anio}
+                onChange={(e) => set("anio", e.target.value)}
                 inputMode="numeric"
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Km actual</label>
-              <input type="number" value={form.kmActual} onChange={(e) => set("kmActual", e.target.value)}
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {usaHoras ? "Horas de uso" : "Km actual"}
+              </label>
+              <input
+                type="number"
+                value={usaHoras ? form.horasUso : form.kmActual}
+                onChange={(e) => set(usaHoras ? "horasUso" : "kmActual", e.target.value)}
                 inputMode="numeric"
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
-              <select value={form.estado} onChange={(e) => set("estado", e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
-                {ESTADOS.map((e) => <option key={e.value} value={e.value}>{e.label}</option>)}
+              <label className="block text-sm font-medium text-gray-700 mb-1">Unidad de medida</label>
+              <select
+                value={form.unidadMedidaUso}
+                onChange={(e) => set("unidadMedidaUso", e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              >
+                <option value="KILOMETROS">Kilómetros</option>
+                <option value="HORAS">Horas</option>
               </select>
             </div>
           </div>
@@ -174,9 +283,12 @@ export default function EditarVehiculoPage() {
               {tiposDocumento.map((td) => (
                 <div key={td.id}>
                   <label className="block text-xs text-gray-500 mb-1">{td.nombre}</label>
-                  <input type="date" value={vencimientos[td.id] ?? ""}
+                  <input
+                    type="date"
+                    value={vencimientos[td.id] ?? ""}
                     onChange={(e) => setVencimientos((v) => ({ ...v, [td.id]: e.target.value }))}
-                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  />
                 </div>
               ))}
             </div>
@@ -205,20 +317,28 @@ export default function EditarVehiculoPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Observaciones</label>
-            <textarea value={form.observaciones} onChange={(e) => set("observaciones", e.target.value)}
+            <textarea
+              value={form.observaciones}
+              onChange={(e) => set("observaciones", e.target.value)}
               rows={3}
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            />
           </div>
 
           {error && <p className="text-red-600 text-sm">{error}</p>}
 
           <div className="flex gap-3 pt-2">
-            <button onClick={handleSubmit} disabled={loading}
-              className="bg-blue-600 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
+            <button
+              onClick={handleSubmit}
+              disabled={loading}
+              className="bg-blue-600 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
               {loading ? "Guardando..." : "Guardar cambios"}
             </button>
-            <button onClick={() => router.back()}
-              className="px-6 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors">
+            <button
+              onClick={() => router.back()}
+              className="px-6 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+            >
               Cancelar
             </button>
           </div>

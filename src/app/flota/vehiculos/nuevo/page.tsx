@@ -5,13 +5,38 @@ import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import Layout from "@/components/Layout"
 import { TIPOS_LICENCIA } from "@/lib/licencias"
+import { MAQUINARIA_TIPOS } from "@/lib/vehiculoUtils"
 
-const TIPOS = [
-  { value: "CAMIONETA", label: "Camioneta" },
-  { value: "SEDAN", label: "Sedán" },
-  { value: "CAMION", label: "Camión" },
-  { value: "MAQUINARIA", label: "Maquinaria" },
-  { value: "BUS", label: "Bus / Minibus" },
+const TIPOS_VEHICULO = [
+  { group: "Livianos", items: [
+    { value: "AUTOMOVIL", label: "Automóvil" },
+    { value: "STATION_WAGON", label: "Station Wagon" },
+    { value: "TODO_TERRENO", label: "Todo Terreno / SUV" },
+    { value: "CAMIONETA", label: "Camioneta" },
+    { value: "FURGON", label: "Furgón" },
+    { value: "MOTOCICLETA", label: "Motocicleta" },
+  ]},
+  { group: "Pesados", items: [
+    { value: "MINIBUS", label: "Minibus" },
+    { value: "BUS", label: "Bus" },
+    { value: "CAMION", label: "Camión" },
+  ]},
+  { group: "Maquinaria / Remolques", items: [
+    { value: "MAQUINARIA", label: "Maquinaria" },
+    { value: "CARRO_ARRASTRE", label: "Carro de Arrastre" },
+    { value: "OTRO", label: "Otro" },
+  ]},
+]
+
+const USOS_MUNICIPALES = [
+  { value: "AMBULANCIA", label: "Ambulancia" },
+  { value: "ALJIBE", label: "Aljibe" },
+  { value: "RECOLECTOR_RESIDUOS", label: "Recolector de residuos" },
+  { value: "TRANSPORTE_PERSONAL", label: "Transporte de personal" },
+  { value: "OPERATIVO_TERRENO", label: "Operativo en terreno" },
+  { value: "EMERGENCIA", label: "Emergencia" },
+  { value: "ADMINISTRATIVO", label: "Administrativo" },
+  { value: "OBRAS", label: "Obras" },
   { value: "OTRO", label: "Otro" },
 ]
 
@@ -29,13 +54,15 @@ export default function NuevoVehiculoPage() {
   if (role && role !== "ADMIN" && role !== "ENCARGADO") {
     return <Layout titulo="Nuevo Vehículo"><p className="text-gray-400 p-8">Sin permisos.</p></Layout>
   }
+
   const [tiposDocumento, setTiposDocumento] = useState<TipoDocumento[]>([])
   const [vencimientos, setVencimientos] = useState<Record<number, string>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [form, setForm] = useState({
-    patente: "", marca: "", modelo: "", anio: "", tipo: "",
-    kmActual: "", observaciones: "",
+    patente: "", numeroInterno: "", marca: "", modelo: "", anio: "",
+    tipo: "", usoMunicipal: "", unidadMedidaUso: "KILOMETROS",
+    kmActual: "", horasUso: "", observaciones: "",
   })
   const [licencias, setLicencias] = useState<string[]>([])
 
@@ -44,20 +71,29 @@ export default function NuevoVehiculoPage() {
   }, [])
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }))
+
+  const setTipo = (v: string) => {
+    const isMaq = MAQUINARIA_TIPOS.includes(v)
+    setForm((f) => ({ ...f, tipo: v, unidadMedidaUso: isMaq ? "HORAS" : "KILOMETROS" }))
+  }
+
   const toggleLicencia = (v: string) =>
     setLicencias((l) => (l.includes(v) ? l.filter((x) => x !== v) : [...l, v]))
 
+  const esMaquinaria = MAQUINARIA_TIPOS.includes(form.tipo)
+  const usaHoras = form.unidadMedidaUso === "HORAS"
+
   const handleSubmit = async () => {
     setError("")
-    if (!form.patente || !form.marca || !form.modelo || !form.anio || !form.tipo) {
-      setError("Patente, marca, modelo, año y tipo son obligatorios.")
-      return
-    }
     setLoading(true)
     const res = await fetch("/api/flota/vehiculos", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, licenciasPermitidas: licencias }),
+      body: JSON.stringify({
+        ...form,
+        usoMunicipal: form.usoMunicipal || null,
+        licenciasPermitidas: licencias,
+      }),
     })
     if (!res.ok) {
       setLoading(false)
@@ -86,24 +122,68 @@ export default function NuevoVehiculoPage() {
         <div className="bg-white rounded-xl shadow-sm p-6 space-y-5">
 
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Patente *</label>
-              <input
-                value={form.patente}
-                onChange={(e) => set("patente", e.target.value.toUpperCase())}
-                placeholder="AB-1234"
-                className="w-full border rounded-lg px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-300"
-              />
-            </div>
-            <div>
+            <div className="col-span-2 sm:col-span-1">
               <label className="block text-sm font-medium text-gray-700 mb-1">Tipo *</label>
               <select
                 value={form.tipo}
-                onChange={(e) => set("tipo", e.target.value)}
+                onChange={(e) => setTipo(e.target.value)}
                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
               >
                 <option value="">Seleccionar...</option>
-                {TIPOS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                {TIPOS_VEHICULO.map((g) => (
+                  <optgroup key={g.group} label={g.group}>
+                    {g.items.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">Copia el tipo tal como aparece en el certificado de inscripción (padrón)</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Uso municipal</label>
+              <select
+                value={form.usoMunicipal}
+                onChange={(e) => set("usoMunicipal", e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              >
+                <option value="">Sin clasificar</option>
+                {USOS_MUNICIPALES.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            {esMaquinaria ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Número interno *</label>
+                <input
+                  value={form.numeroInterno}
+                  onChange={(e) => set("numeroInterno", e.target.value.toUpperCase())}
+                  placeholder="MAQ-001"
+                  className="w-full border rounded-lg px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-300"
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Patente *</label>
+                <input
+                  value={form.patente}
+                  onChange={(e) => set("patente", e.target.value.toUpperCase())}
+                  placeholder="ABCD-12 o AB-1234"
+                  className="w-full border rounded-lg px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-blue-300"
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Unidad de medida</label>
+              <select
+                value={form.unidadMedidaUso}
+                onChange={(e) => set("unidadMedidaUso", e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              >
+                <option value="KILOMETROS">Kilómetros</option>
+                <option value="HORAS">Horas</option>
               </select>
             </div>
           </div>
@@ -142,11 +222,13 @@ export default function NuevoVehiculoPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Kilometraje actual</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {usaHoras ? "Horas de uso actuales" : "Kilometraje actual"}
+              </label>
               <input
                 type="number"
-                value={form.kmActual}
-                onChange={(e) => set("kmActual", e.target.value)}
+                value={usaHoras ? form.horasUso : form.kmActual}
+                onChange={(e) => set(usaHoras ? "horasUso" : "kmActual", e.target.value)}
                 placeholder="0"
                 inputMode="numeric"
                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
