@@ -12,7 +12,7 @@ async function ensureDir(filePath: string) {
 export async function uploadFile(
   storagePath: string,
   buffer: Buffer,
-  _contentType: string
+  contentType: string
 ): Promise<{ publicUrl: string; error: null } | { publicUrl: null; error: string }> {
   if (IS_LOCAL) {
     try {
@@ -29,7 +29,7 @@ export async function uploadFile(
   const { supabaseStorage, BUCKET } = await import("./supabase-storage")
   const { error } = await supabaseStorage.storage
     .from(BUCKET)
-    .upload(storagePath, buffer, { upsert: true })
+    .upload(storagePath, buffer, { upsert: true, contentType })
 
   if (error) {
     console.error("[storage] supabase upload error:", error)
