@@ -57,7 +57,7 @@ function buildTestPdf(): string {
  * y devuelve la respuesta cruda para diagnóstico.
  */
 export async function GET() {
-  const auth = await requireRole("ADMIN")
+  const auth = await requireRole("ADMIN", "ENCARGADO")
   if (!auth.ok) return auth.response
 
   const rut = auth.session.user.rut
