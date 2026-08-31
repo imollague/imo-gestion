@@ -13,7 +13,8 @@ interface VencimientoDoc {
 
 interface Vehiculo {
   id: number
-  patente: string
+  patente: string | null
+  numeroInterno: string | null
   marca: string
   modelo: string
   anio: number
