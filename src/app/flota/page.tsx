@@ -81,8 +81,8 @@ export default function FlotaPage() {
   }, [session])
 
   const filtrados = vehiculos.filter((v) =>
-    [v.patente, v.marca, v.modelo].some((f) =>
-      f.toLowerCase().includes(busqueda.toLowerCase())
+    [v.patente, v.marca, v.modelo, v.numeroInterno].some((f) =>
+      f?.toLowerCase().includes(busqueda.toLowerCase())
     )
   )
 
