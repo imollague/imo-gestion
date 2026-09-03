@@ -50,6 +50,7 @@ export default function SolicitudesPage() {
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([])
   const [cargando, setCargando] = useState(true)
   const [verTodas, setVerTodas] = useState(false)
+  const [verCerradas, setVerCerradas] = useState(false)
 
   const role = session?.user?.role
 
@@ -60,14 +61,16 @@ export default function SolicitudesPage() {
   useEffect(() => {
     if (!session) return
     const puedeVerTodas = role === "ADMIN" || role === "ENCARGADO"
-    const url = puedeVerTodas && verTodas
-      ? "/api/flota/solicitudes?todas=1"
-      : "/api/flota/solicitudes"
+    
+    let url = "/api/flota/solicitudes"
+    if(puedeVerTodas && verTodas) url += "?todas=1"
+    else if(puedeVerTodas && verCerradas) url += "?cerradas=1"
+    
     setCargando(true)
     fetch(url)
       .then((r) => r.json())
       .then((d) => { setSolicitudes(d); setCargando(false) })
-  }, [session, verTodas, role])
+  }, [session, verTodas, verCerradas, role])
 
   return (
     <Layout titulo="Solicitudes de Vehículos">
@@ -76,16 +79,22 @@ export default function SolicitudesPage() {
           {(role === "ADMIN" || role === "ENCARGADO") && (
             <>
               <button
-                onClick={() => setVerTodas(false)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${!verTodas ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50 border"}`}
+                onClick={() => {setVerTodas(false);setVerCerradas(false)}}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${(!verTodas && !verCerradas) ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50 border"}`}
               >
                 Mis solicitudes
               </button>
               <button
-                onClick={() => setVerTodas(true)}
+                onClick={() => { setVerTodas(true); setVerCerradas(false) }}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${verTodas ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50 border"}`}
               >
                 Todas
+              </button>
+              <button
+                onClick={() => { setVerCerradas(true); setVerTodas(false) }}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${verCerradas ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50 border"}`}
+              >
+                Cerradas
               </button>
             </>
           )}

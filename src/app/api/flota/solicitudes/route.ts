@@ -11,9 +11,11 @@ export async function GET(req: NextRequest) {
   const role = auth.session.user.role
   const { searchParams } = new URL(req.url)
   const todas = searchParams.get("todas") === "1"
+  const cerradas = searchParams.get("cerradas") === "1"
 
   const puedeVerTodas = role === "ADMIN" || role === "ENCARGADO"
-  const where = (puedeVerTodas && todas) ? {} : { creadoPorId: userId }
+  const where = (puedeVerTodas && todas) ? {estado: {not: "CERRADA"}} : 
+    (puedeVerTodas && cerradas) ? { estado: "CERRADA" } : { creadoPorId: userId }
 
   const solicitudes = await prisma.solicitudVehiculo.findMany({
     where,
