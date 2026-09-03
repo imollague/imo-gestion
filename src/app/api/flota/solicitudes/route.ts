@@ -19,7 +19,9 @@ export async function GET(req: NextRequest) {
     ? { estado: { not: EstadoSolicitud.CERRADA } }
     : (puedeVerTodas && cerradas)
     ? { estado: EstadoSolicitud.CERRADA }
-    : { creadoPorId: userId }
+    : cerradas
+    ? { creadoPorId: userId, estado: EstadoSolicitud.CERRADA }
+    : { creadoPorId: userId, estado: { not: EstadoSolicitud.CERRADA } }
 
   const solicitudes = await prisma.solicitudVehiculo.findMany({
     where,

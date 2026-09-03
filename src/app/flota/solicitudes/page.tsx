@@ -63,8 +63,8 @@ export default function SolicitudesPage() {
     const puedeVerTodas = role === "ADMIN" || role === "ENCARGADO"
     
     let url = "/api/flota/solicitudes"
-    if(puedeVerTodas && verTodas) url += "?todas=1"
-    else if(puedeVerTodas && verCerradas) url += "?cerradas=1"
+    if (puedeVerTodas && verTodas) url += "?todas=1"
+    else if (verCerradas) url += "?cerradas=1"
     
     setCargando(true)
     fetch(url)
@@ -76,10 +76,10 @@ export default function SolicitudesPage() {
     <Layout titulo="Solicitudes de Vehículos">
       <div className="flex items-center justify-between mb-6">
         <div className="flex gap-2">
-          {(role === "ADMIN" || role === "ENCARGADO") && (
+          {(role === "ADMIN" || role === "ENCARGADO") ? (
             <>
               <button
-                onClick={() => {setVerTodas(false);setVerCerradas(false)}}
+                onClick={() => { setVerTodas(false); setVerCerradas(false) }}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${(!verTodas && !verCerradas) ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50 border"}`}
               >
                 Mis solicitudes
@@ -92,6 +92,21 @@ export default function SolicitudesPage() {
               </button>
               <button
                 onClick={() => { setVerCerradas(true); setVerTodas(false) }}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${verCerradas ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50 border"}`}
+              >
+                Cerradas
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setVerCerradas(false)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${!verCerradas ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50 border"}`}
+              >
+                Activas
+              </button>
+              <button
+                onClick={() => setVerCerradas(true)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${verCerradas ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50 border"}`}
               >
                 Cerradas
