@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireRole } from "@/lib/apiAuth"
 import { siguienteFolio } from "@/lib/folio"
+import { EstadoSolicitud } from "@/generated/prisma/client"
 
 export async function GET(req: NextRequest) {
   const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
@@ -14,8 +15,11 @@ export async function GET(req: NextRequest) {
   const cerradas = searchParams.get("cerradas") === "1"
 
   const puedeVerTodas = role === "ADMIN" || role === "ENCARGADO"
-  const where = (puedeVerTodas && todas) ? {estado: {not: "CERRADA"}} : 
-    (puedeVerTodas && cerradas) ? { estado: "CERRADA" } : { creadoPorId: userId }
+  const where = (puedeVerTodas && todas)
+    ? { estado: { not: EstadoSolicitud.CERRADA } }
+    : (puedeVerTodas && cerradas)
+    ? { estado: EstadoSolicitud.CERRADA }
+    : { creadoPorId: userId }
 
   const solicitudes = await prisma.solicitudVehiculo.findMany({
     where,
