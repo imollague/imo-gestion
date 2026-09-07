@@ -6,7 +6,7 @@ import { useSession } from "next-auth/react"
 import Layout from "@/components/Layout"
 import { TIPOS_LICENCIA } from "@/lib/licencias"
 
-interface UsuarioFlota { id: number; name: string; username: string }
+interface UsuarioFlota { id: number; name: string; username: string; rut: string | null }
 
 export default function NuevoConductorPage() {
   const { data: session, status } = useSession()
@@ -103,9 +103,20 @@ export default function NuevoConductorPage() {
 
           <div className="border-t pt-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Vincular a cuenta de usuario (opcional)</label>
-            <p className="text-xs text-gray-400 mb-2">Si se vincula, el sistema detecta automáticamente al conductor cuando esa cuenta inicia sesión.</p>
-            <select value={form.userId} onChange={(e) => set("userId", e.target.value)}
-              className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+            <p className="text-xs text-gray-400 mb-2">Al seleccionar una cuenta se pre-llenan nombre y RUT. El sistema detecta automáticamente al conductor cuando esa cuenta inicia sesión.</p>
+            <select
+              value={form.userId}
+              onChange={(e) => {
+                const uid = e.target.value
+                const u = usuarios.find((u) => String(u.id) === uid)
+                setForm((f) => ({
+                  ...f,
+                  userId: uid,
+                  ...(u ? { nombre: u.name, rut: u.rut ?? f.rut } : {}),
+                }))
+              }}
+              className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            >
               <option value="">Sin vincular</option>
               {usuarios.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.username})</option>)}
             </select>
