@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback, useRef } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { useSession } from "next-auth/react"
 import Layout from "@/components/Layout"
-import jsPDF from "jspdf"
+import { crearPDFMembretado } from "@/lib/pdfMembrete"
+import { comprimirImagen } from "@/lib/comprimirImagen"
 
 interface ChecklistItem { id: number; categoria: string; descripcion: string; orden: number }
 interface ChecklistRespuesta { itemId: number; valor: string; observacion: string }
@@ -70,22 +71,17 @@ function fmtFecha(iso: string) {
   return new Date(iso).toLocaleDateString("es-CL")
 }
 
-function buildDocPDF(s: Solicitud): InstanceType<typeof jsPDF> {
-  const doc = new jsPDF()
-  const margen = 20
-  let y = margen
+async function buildDocPDF(s: Solicitud) {
+  const { doc, margenX, anchoUtil, yContenido, yPiePagina } = await crearPDFMembretado()
+  let y = yContenido
 
-  doc.setFontSize(11)
-  doc.setTextColor(100)
-  doc.text("Municipalidad de Ollagüe — Sistema IMO", margen, y)
-  y += 8
   doc.setFontSize(16)
   doc.setTextColor(0)
   doc.setFont("helvetica", "bold")
-  doc.text(s.ordenServicio?.folio ?? `Orden de Servicio N° ${s.id}`, margen, y)
+  doc.text(s.ordenServicio?.folio ?? `Orden de Servicio N° ${s.id}`, margenX, y)
   y += 6
   doc.setDrawColor(200)
-  doc.line(margen, y, 210 - margen, y)
+  doc.line(margenX, y, margenX + anchoUtil, y)
   y += 10
 
   const campos: [string, string][] = [
@@ -102,27 +98,28 @@ function buildDocPDF(s: Solicitud): InstanceType<typeof jsPDF> {
   doc.setFontSize(11)
   for (const [label, valor] of campos) {
     doc.setFont("helvetica", "bold")
-    doc.text(`${label}:`, margen, y)
+    doc.text(`${label}:`, margenX, y)
     doc.setFont("helvetica", "normal")
-    doc.text(valor, margen + 55, y)
+    doc.text(valor, margenX + 55, y)
     y += 8
   }
 
-  y += 16
-  doc.line(margen, y, margen + 70, y)
+  y = Math.min(y + 16, yPiePagina - 12)
+  doc.line(margenX, y, margenX + 70, y)
   y += 6
   doc.setFontSize(10)
   doc.setTextColor(100)
-  doc.text("Firma Autorizante", margen, y)
-  doc.text("(Administrador / Alcalde / Subrogante)", margen, y + 5)
-  doc.line(210 - margen - 70, y - 6, 210 - margen, y - 6)
-  doc.text("Firma Conductor", 210 - margen - 70, y)
+  doc.text("Firma Autorizante", margenX, y)
+  doc.text("(Administrador / Alcalde / Subrogante)", margenX, y + 5)
+  doc.line(margenX + anchoUtil - 70, y - 6, margenX + anchoUtil, y - 6)
+  doc.text("Firma Conductor", margenX + anchoUtil - 70, y)
 
   return doc
 }
 
-function generarPDFOrden(s: Solicitud) {
-  buildDocPDF(s).save(`${s.ordenServicio?.folio ?? `OS-${s.id}`}-${s.vehiculo.patente}.pdf`)
+async function generarPDFOrden(s: Solicitud) {
+  const doc = await buildDocPDF(s)
+  doc.save(`${s.ordenServicio?.folio ?? `OS-${s.id}`}-${s.vehiculo.patente}.pdf`)
 }
 
 // ─── Panel de observaciones (ENCARGADO/ADMIN) ─────────
@@ -357,17 +354,27 @@ function FotosChecklist({ solicitudId, fotosIniciales }: {
 }) {
   const [fotos, setFotos] = useState<FotoRevision[]>(fotosIniciales)
   const [subiendo, setSubiendo] = useState<string | null>(null)
+  const [errores, setErrores] = useState<Record<string, string>>({})
 
   const subirFoto = async (tipo: string, file: File) => {
     setSubiendo(tipo)
-    const fd = new FormData()
-    fd.append("archivo", file)
-    fd.append("tipo", tipo)
-    const res = await fetch(`/api/flota/solicitudes/${solicitudId}/checklist/fotos`, { method: "POST", body: fd })
-    setSubiendo(null)
-    if (res.ok) {
-      const nueva = await res.json()
-      setFotos((prev) => [...prev.filter((f) => f.tipo !== tipo), nueva])
+    setErrores((prev) => ({ ...prev, [tipo]: "" }))
+    try {
+      const archivo = await comprimirImagen(file)
+      const fd = new FormData()
+      fd.append("archivo", archivo)
+      fd.append("tipo", tipo)
+      const res = await fetch(`/api/flota/solicitudes/${solicitudId}/checklist/fotos`, { method: "POST", body: fd })
+      if (res.ok) {
+        const nueva = await res.json()
+        setFotos((prev) => [...prev.filter((f) => f.tipo !== tipo), nueva])
+      } else {
+        setErrores((prev) => ({ ...prev, [tipo]: "Error al subir. Reintenta." }))
+      }
+    } catch {
+      setErrores((prev) => ({ ...prev, [tipo]: "Sin conexión. Reintenta." }))
+    } finally {
+      setSubiendo(null)
     }
   }
 
@@ -418,6 +425,7 @@ function FotosChecklist({ solicitudId, fotosIniciales }: {
                   />
                 </label>
               )}
+              {errores[value] && <p className="text-xs text-red-500 px-2 pb-1.5">{errores[value]}</p>}
             </div>
           )
         })}
@@ -817,7 +825,8 @@ export default function SolicitudDetallePage() {
     if (!solicitud) return
     setLoadingAction(true)
     setFirmaError("")
-    const pdfBase64 = buildDocPDF(solicitud).output("datauristring").split(",")[1]
+    const doc = await buildDocPDF(solicitud)
+    const pdfBase64 = doc.output("datauristring").split(",")[1]
     const res = await fetch(`/api/flota/solicitudes/${id}/orden/firmar`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

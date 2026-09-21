@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(git add *)",
+      "Bash(git restore *)",
+      "Bash(git commit -m ' *)",
+      "Bash(powershell.exe -Command \"Start-Process 'C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe'\")",
+      "Bash(docker compose *)",
+      "Bash(DATABASE_URL=\"postgresql://imo:imo_dev@localhost:5432/imo_stock\" npx prisma migrate deploy)",
+      "Bash(DATABASE_URL=\"postgresql://imo:imo_dev@localhost:5432/imo_stock\" npx tsx prisma/seed.ts)",
+      "Bash(DATABASE_URL=\"postgresql://imo:imo_dev@localhost:5432/imo_stock\" npx tsx prisma/seed-checklist.ts)"
+    ]
+  }
+}
