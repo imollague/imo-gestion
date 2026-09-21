@@ -1,11 +1,25 @@
 import crypto from 'crypto'
 
+// Serializa como json.dumps de Python (ensure_ascii=True): escapa todo caracter
+// fuera del rango ASCII imprimible como \uXXXX. El script de referencia de FirmaGob
+// serializa así — mandar UTF-8 crudo (p.ej. la "ü" de "Ollagüe") puede llegar mal
+// interpretado en su backend y hacer que el "entity" no calce con el registrado.
+function jsonStringifyAscii(value: object): string {
+  return JSON.stringify(value)
+    .split('')
+    .map((c) => {
+      const code = c.charCodeAt(0)
+      return code > 126 ? '\\u' + code.toString(16).padStart(4, '0') : c
+    })
+    .join('')
+}
+
 // JWT HS256 sin dependencia externa — compatible con Turbopack/Edge
 function signJwtHs256(payload: object, secret: string): string {
   const b64url = (s: string) =>
     Buffer.from(s).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
-  const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
-  const body = b64url(JSON.stringify(payload))
+  const header = b64url(jsonStringifyAscii({ alg: 'HS256', typ: 'JWT' }))
+  const body = b64url(jsonStringifyAscii(payload))
   const sig = crypto
     .createHmac('sha256', secret)
     .update(`${header}.${body}`)
@@ -35,12 +49,12 @@ function limpiarRut(rut: string): string {
 
 function generarToken(rut: string, purpose: string): string {
   const payload = {
-    entity: process.env.FIRMAGOB_ENTITY,
+    entity: process.env.FIRMAGOB_ENTITY?.trim(),
     run: limpiarRut(rut),
     expiration: expirationChile(25 * 60 * 1000), // 25 min (máximo permitido: 30 min)
     purpose,
   }
-  return signJwtHs256(payload, process.env.FIRMAGOB_SECRET!)
+  return signJwtHs256(payload, process.env.FIRMAGOB_SECRET!.trim())
 }
 
 function checksumBase64(base64: string): string {
@@ -132,7 +146,7 @@ export async function firmarDocumentoAtendido({
 
   return llamarApi(
     { OTP: otp },
-    { token, api_token_key: process.env.FIRMAGOB_API_TOKEN_KEY, files: [file] }
+    { token, api_token_key: process.env.FIRMAGOB_API_TOKEN_KEY?.trim(), files: [file] }
   )
 }
 
@@ -151,7 +165,7 @@ export async function firmarDocumentoDesatendido({
     {},
     {
       token,
-      api_token_key: process.env.FIRMAGOB_API_TOKEN_KEY,
+      api_token_key: process.env.FIRMAGOB_API_TOKEN_KEY?.trim(),
       files: [{ 'content-type': 'application/pdf', content: pdfBase64, description: descripcion, checksum }],
     }
   )

@@ -2,11 +2,23 @@ import { NextResponse } from "next/server"
 import { requireRole } from "@/lib/apiAuth"
 import crypto from "crypto"
 
+// Serializa como json.dumps de Python (ensure_ascii=True): escapa todo caracter
+// fuera del rango ASCII imprimible como \uXXXX, igual que src/lib/firmagob.ts
+function jsonStringifyAscii(value: object): string {
+  return JSON.stringify(value)
+    .split("")
+    .map((c) => {
+      const code = c.charCodeAt(0)
+      return code > 126 ? "\\u" + code.toString(16).padStart(4, "0") : c
+    })
+    .join("")
+}
+
 function signJwtHs256(payload: object, secret: string): string {
   const b64url = (s: string) =>
     Buffer.from(s).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "")
-  const header = b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }))
-  const body = b64url(JSON.stringify(payload))
+  const header = b64url(jsonStringifyAscii({ alg: "HS256", typ: "JWT" }))
+  const body = b64url(jsonStringifyAscii(payload))
   const sig = crypto
     .createHmac("sha256", secret)
     .update(`${header}.${body}`)
@@ -69,9 +81,9 @@ export async function GET() {
     : process.env.FIRMAGOB_API_URL!
 
   const rutLimpio = limpiarRut(rut)
-  const entity = process.env.FIRMAGOB_ENTITY
-  const secret = process.env.FIRMAGOB_SECRET!
-  const apiTokenKey = process.env.FIRMAGOB_API_TOKEN_KEY
+  const entity = process.env.FIRMAGOB_ENTITY?.trim()
+  const secret = process.env.FIRMAGOB_SECRET!.trim()
+  const apiTokenKey = process.env.FIRMAGOB_API_TOKEN_KEY?.trim()
 
   const payload = {
     entity,
@@ -112,6 +124,8 @@ export async function GET() {
       rutOriginal: rut,
       rutLimpio,
       apiTokenKey: apiTokenKey ? `${apiTokenKey.slice(0, 6)}...` : null,
+      apiTokenKeyLength: apiTokenKey?.length ?? 0,
+      secretLength: secret.length,
     },
     tokenPayload: payload,
     httpStatus,
