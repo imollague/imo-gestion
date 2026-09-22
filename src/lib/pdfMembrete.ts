@@ -35,17 +35,7 @@ export interface Membrete {
   yPiePagina: number
 }
 
-/**
- * Crea un jsPDF tamaño carta con el membrete oficial (encabezado con sello +
- * franja institucional, pie de página con datos de contacto), replicando
- * public/Carta.docx. Devuelve las coordenadas útiles para dibujar el cuerpo.
- */
-export async function crearPDFMembretado(dependencia = "OFICINA DE INFORMÁTICA"): Promise<Membrete> {
-  const doc = new jsPDF({ format: "letter", unit: "mm", compress: true })
-  const pageW = doc.internal.pageSize.getWidth()
-  const pageH = doc.internal.pageSize.getHeight()
-  const margenX = 20
-
+async function cargarAssetsMembrete() {
   const [wave, sello, barra, iconPhone, iconWeb, iconLoc] = await Promise.all([
     loadImageDataUrl(`${ASSET_BASE}/wave-header.png`),
     loadImageDataUrl(`${ASSET_BASE}/sello-municipal.png`),
@@ -54,6 +44,18 @@ export async function crearPDFMembretado(dependencia = "OFICINA DE INFORMÁTICA"
     loadImageDataUrl(`${ASSET_BASE}/icon-web.png`),
     loadImageDataUrl(`${ASSET_BASE}/icon-location.png`),
   ])
+  return { wave, sello, barra, iconPhone, iconWeb, iconLoc }
+}
+
+function dibujarMembrete(
+  doc: jsPDF,
+  assets: Awaited<ReturnType<typeof cargarAssetsMembrete>>,
+  margenX: number,
+  dependencia: string
+): { yContenido: number; yPiePagina: number } {
+  const pageW = doc.internal.pageSize.getWidth()
+  const pageH = doc.internal.pageSize.getHeight()
+  const { wave, sello, barra, iconPhone, iconWeb, iconLoc } = assets
 
   // ── Encabezado ──
   const waveH = pageW / WAVE_ASPECT
@@ -91,11 +93,35 @@ export async function crearPDFMembretado(dependencia = "OFICINA DE INFORMÁTICA"
     doc.text(texto, x + iconSize + 2, footerTextY)
   }
 
-  return {
-    doc,
-    margenX,
-    anchoUtil: pageW - margenX * 2,
-    yContenido: waveH + selloSize + 4,
-    yPiePagina: barY - 6,
-  }
+  return { yContenido: waveH + selloSize + 4, yPiePagina: barY - 6 }
+}
+
+/**
+ * Crea un jsPDF tamaño carta con el membrete oficial (encabezado con sello +
+ * franja institucional, pie de página con datos de contacto), replicando
+ * public/Carta.docx. Devuelve las coordenadas útiles para dibujar el cuerpo.
+ */
+export async function crearPDFMembretado(dependencia = "OFICINA DE INFORMÁTICA"): Promise<Membrete> {
+  const doc = new jsPDF({ format: "letter", unit: "mm", compress: true })
+  const pageW = doc.internal.pageSize.getWidth()
+  const margenX = 20
+
+  const assets = await cargarAssetsMembrete()
+  const { yContenido, yPiePagina } = dibujarMembrete(doc, assets, margenX, dependencia)
+
+  return { doc, margenX, anchoUtil: pageW - margenX * 2, yContenido, yPiePagina }
+}
+
+/**
+ * Agrega una página nueva con el mismo membrete (encabezado + pie), para
+ * contenido que debe continuar en otra hoja (p. ej. la hoja de firmas).
+ */
+export async function agregarPaginaMembretada(
+  doc: jsPDF,
+  margenX: number,
+  dependencia = "OFICINA DE INFORMÁTICA"
+): Promise<{ yContenido: number; yPiePagina: number }> {
+  doc.addPage()
+  const assets = await cargarAssetsMembrete()
+  return dibujarMembrete(doc, assets, margenX, dependencia)
 }

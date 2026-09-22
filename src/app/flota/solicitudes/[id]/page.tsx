@@ -5,7 +5,9 @@ import { useRouter, useParams } from "next/navigation"
 import { useSession } from "next-auth/react"
 import Layout from "@/components/Layout"
 import { crearPDFMembretado } from "@/lib/pdfMembrete"
+import { agregarHojaFirmas } from "@/lib/pdfFirmas"
 import { comprimirImagen } from "@/lib/comprimirImagen"
+import { formatearRut } from "@/lib/validarRut"
 
 interface ChecklistItem { id: number; categoria: string; descripcion: string; orden: number }
 interface ChecklistRespuesta { itemId: number; valor: string; observacion: string }
@@ -71,8 +73,8 @@ function fmtFecha(iso: string) {
   return new Date(iso).toLocaleDateString("es-CL")
 }
 
-async function buildDocPDF(s: Solicitud) {
-  const { doc, margenX, anchoUtil, yContenido, yPiePagina } = await crearPDFMembretado()
+async function buildDocPDF(s: Solicitud, firmante?: { nombre: string; rut: string }) {
+  const { doc, margenX, anchoUtil, yContenido } = await crearPDFMembretado()
   let y = yContenido
 
   doc.setFontSize(16)
@@ -104,15 +106,11 @@ async function buildDocPDF(s: Solicitud) {
     y += 8
   }
 
-  y = Math.min(y + 16, yPiePagina - 12)
-  doc.line(margenX, y, margenX + 70, y)
-  y += 6
-  doc.setFontSize(10)
-  doc.setTextColor(100)
-  doc.text("Firma Autorizante", margenX, y)
-  doc.text("(Administrador / Alcalde / Subrogante)", margenX, y + 5)
-  doc.line(margenX + anchoUtil - 70, y - 6, margenX + anchoUtil, y - 6)
-  doc.text("Firma Conductor", margenX + anchoUtil - 70, y)
+  if (firmante) {
+    await agregarHojaFirmas(doc, margenX, anchoUtil, [
+      { nombre: firmante.nombre, rut: formatearRut(firmante.rut) },
+    ])
+  }
 
   return doc
 }
@@ -822,10 +820,15 @@ export default function SolicitudDetallePage() {
   }
 
   const firmarOrden = async () => {
-    if (!solicitud) return
+    if (!solicitud || !session?.user) return
     setLoadingAction(true)
     setFirmaError("")
-    const doc = await buildDocPDF(solicitud)
+    if (!session.user.rut) {
+      setLoadingAction(false)
+      setFirmaError("Tu usuario no tiene RUT configurado. Solicita al administrador que lo ingrese en tu perfil.")
+      return
+    }
+    const doc = await buildDocPDF(solicitud, { nombre: session.user.name ?? "", rut: session.user.rut })
     const pdfBase64 = doc.output("datauristring").split(",")[1]
     const res = await fetch(`/api/flota/solicitudes/${id}/orden/firmar`, {
       method: "POST",

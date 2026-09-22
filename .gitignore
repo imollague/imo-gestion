@@ -42,3 +42,9 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# scripts puntuales de mantenimiento de datos (uso local, no versionar)
+scripts/backup-vehiculos-eliminados-*.json
+scripts/reconciliar-vehiculos.ts
+scripts/check-vehiculos-borrar.ts
+scripts/eliminar-vehiculos-sobrantes.ts
