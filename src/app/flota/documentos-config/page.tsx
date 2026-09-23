@@ -4,12 +4,18 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import Layout from "@/components/Layout"
+import { TIPO_VEHICULO_LABELS } from "@/lib/vehiculoUtils"
 
 interface TipoDocumento {
   id: number
   nombre: string
   diasAlertaDefault: number
   esDefault: boolean
+}
+
+interface IntervaloUso {
+  tipo: string
+  intervalo: number | null
 }
 
 export default function DocumentosConfigPage() {
@@ -21,6 +27,9 @@ export default function DocumentosConfigPage() {
   const [dias, setDias] = useState("30")
   const [error, setError] = useState("")
 
+  const [intervalos, setIntervalos] = useState<IntervaloUso[]>([])
+  const [cargandoIntervalos, setCargandoIntervalos] = useState(true)
+
   useEffect(() => {
     if (status === "unauthenticated") router.push("/login")
   }, [status, router])
@@ -29,7 +38,20 @@ export default function DocumentosConfigPage() {
     fetch("/api/flota/tipos-documento").then((r) => r.json()).then((d) => { setTipos(d); setCargando(false) })
   }
 
-  useEffect(() => { if (session) cargar() }, [session])
+  const cargarIntervalos = () => {
+    fetch("/api/flota/intervalos-uso").then((r) => r.json()).then((d) => { setIntervalos(d); setCargandoIntervalos(false) })
+  }
+
+  useEffect(() => { if (session) { cargar(); cargarIntervalos() } }, [session])
+
+  const actualizarIntervalo = async (tipo: string, valor: string) => {
+    await fetch("/api/flota/intervalos-uso", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tipo, intervalo: valor.trim() === "" ? null : valor }),
+    })
+    cargarIntervalos()
+  }
 
   const role = session?.user?.role
   if (role && role !== "ADMIN" && role !== "ENCARGADO") {
@@ -130,6 +152,42 @@ export default function DocumentosConfigPage() {
           </button>
         </div>
         {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
+      </div>
+
+      <h2 className="text-lg font-semibold text-gray-800 mt-8 mb-1">Alertas de mantención por uso</h2>
+      <p className="text-sm text-gray-500 mb-4">
+        Cada vez que un vehículo acumule este intervalo de kilómetros (u horas, según corresponda) desde
+        la última alerta, se envía un correo. Dejar vacío desactiva la alerta para ese tipo de vehículo.
+      </p>
+
+      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+        {cargandoIntervalos ? (
+          <div className="p-12 text-center text-gray-400">Cargando...</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+              <tr>
+                <th className="text-left px-4 py-3">Tipo de vehículo</th>
+                <th className="text-left px-4 py-3">Intervalo</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {intervalos.map((i) => (
+                <tr key={i.tipo}>
+                  <td className="px-4 py-3 text-gray-800">{TIPO_VEHICULO_LABELS[i.tipo] ?? i.tipo}</td>
+                  <td className="px-4 py-3">
+                    <input
+                      type="number" inputMode="numeric" defaultValue={i.intervalo ?? ""}
+                      placeholder="Sin alerta"
+                      onBlur={(e) => actualizarIntervalo(i.tipo, e.target.value)}
+                      className="w-24 border rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    /> {i.tipo === "MAQUINARIA" || i.tipo === "CARRO_ARRASTRE" ? "horas" : "km"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </Layout>
   )

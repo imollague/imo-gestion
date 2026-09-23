@@ -24,6 +24,7 @@ model User {
   roleAnterior   Role?
   active         Boolean  @default(true)
   rut            String?  // RUT del funcionario para firma electrónica FirmaGob (sin puntos ni dígito verificador)
+  email          String?  // correo de contacto para alertas (vencimientos, kilometraje, etc.)
   createdAt      DateTime @default(now())
 
   movimientosBodega     MovimientoBodega[]
@@ -408,6 +409,7 @@ model LoteFarmacia {
 // ─── MÓDULO FLOTA ──────────────────────────────────────
 
 enum TipoVehiculo {
+  SEDAN // valor histórico sin uso, se mantiene para no forzar una recreación del tipo enum en Postgres
   AUTOMOVIL
   STATION_WAGON
   TODO_TERRENO
@@ -473,6 +475,7 @@ model Vehiculo {
   unidadMedidaUso       UnidadMedidaUso  @default(KILOMETROS)
   kmActual              Int              @default(0)
   horasUso              Int              @default(0)
+  usoUltimaAlerta       Int?             // km u horas (según unidadMedidaUso) al momento de la última alerta de uso enviada
   licenciasPermitidas   String[]         @default([]) // vacío = sin restricción de licencia
   observaciones         String?
   imagenUrl             String?
@@ -656,6 +659,15 @@ model MantencionVehiculo {
   registradoEn DateTime       @default(now())
   usuarioId    Int
   usuario      User           @relation(fields: [usuarioId], references: [id])
+}
+
+// Intervalo de uso (km u horas, según unidadMedidaUso del vehículo) que dispara una
+// alerta de mantención por correo al llegar cada múltiplo. Editable por tipo de vehículo
+// desde /flota/documentos-config. Sin fila (o intervalo = null) = sin alerta para ese tipo.
+model IntervaloUsoTipoVehiculo {
+  id        Int          @id @default(autoincrement())
+  tipo      TipoVehiculo @unique
+  intervalo Int?
 }
 
 // Catálogo de tipos de documento configurable (SOAP/Rev. Técnica/Permiso vienen por defecto, esDefault=true)

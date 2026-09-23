@@ -9,6 +9,7 @@ interface Usuario {
   username: string
   name: string
   rut: string | null
+  email: string | null
   role: Role
   roleAnterior: Role | null
   roleExpiration: string | null
@@ -39,8 +40,12 @@ export default function UsuariosPage() {
   const [rutInput, setRutInput] = useState("")
   const [guardandoRut, setGuardandoRut] = useState(false)
 
+  const [usuarioEmail, setUsuarioEmail] = useState<Usuario | null>(null)
+  const [emailInput, setEmailInput] = useState("")
+  const [guardandoEmail, setGuardandoEmail] = useState(false)
+
   const [form, setForm] = useState({
-    username: "", name: "", role: "BODEGA", password: "", rut: "",
+    username: "", name: "", role: "BODEGA", password: "", rut: "", email: "",
   })
 
   useEffect(() => { fetchUsuarios() }, [])
@@ -77,7 +82,7 @@ export default function UsuariosPage() {
       return
     }
     setExito(`Usuario "${form.name}" creado correctamente`)
-    setForm({ username: "", name: "", role: "BODEGA", password: "", rut: "" })
+    setForm({ username: "", name: "", role: "BODEGA", password: "", rut: "", email: "" })
     setMostrarForm(false)
     fetchUsuarios()
     setGuardando(false)
@@ -174,6 +179,28 @@ export default function UsuariosPage() {
     setGuardandoRut(false)
   }
 
+  const abrirModalEmail = (usuario: Usuario) => {
+    setUsuarioEmail(usuario)
+    setEmailInput(usuario.email ?? "")
+  }
+
+  const handleGuardarEmail = async () => {
+    if (!usuarioEmail) return
+    setGuardandoEmail(true)
+    const res = await fetch("/api/admin/usuarios", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: usuarioEmail.id, email: emailInput }),
+    })
+    if (res.ok) {
+      setUsuarioEmail(null)
+      fetchUsuarios()
+      setExito(`Email de "${usuarioEmail.name}" actualizado`)
+      setTimeout(() => setExito(""), 3000)
+    }
+    setGuardandoEmail(false)
+  }
+
   const formatFecha = (fecha: string) =>
     new Date(fecha).toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" })
 
@@ -238,6 +265,15 @@ export default function UsuariosPage() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Ej: 12.345.678-9 — solo necesario para quienes firman documentos" />
               </div>
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email <span className="text-gray-400 font-normal">(para alertas por correo)</span>
+                </label>
+                <input type="email" value={form.email}
+                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="correo@municipalidadollague.cl" />
+              </div>
             </div>
             <button onClick={handleCrear} disabled={guardando}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors">
@@ -257,6 +293,7 @@ export default function UsuariosPage() {
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Nombre</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Usuario</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">RUT</th>
+                  <th className="text-left px-4 py-3 text-gray-600 font-medium">Email</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Rol</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">Creado</th>
                   <th className="text-center px-4 py-3 text-gray-600 font-medium">Estado</th>
@@ -272,6 +309,12 @@ export default function UsuariosPage() {
                       {u.rut
                         ? <span>{u.rut}</span>
                         : <span className="text-xs text-gray-400 italic">Sin RUT</span>
+                      }
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {u.email
+                        ? <span>{u.email}</span>
+                        : <span className="text-xs text-gray-400 italic">Sin email</span>
                       }
                     </td>
                     <td className="px-4 py-3">
@@ -298,6 +341,9 @@ export default function UsuariosPage() {
                         </button>
                         <button onClick={() => abrirModalRut(u)} className="text-blue-500 text-xs hover:underline">
                           Editar RUT
+                        </button>
+                        <button onClick={() => abrirModalEmail(u)} className="text-blue-500 text-xs hover:underline">
+                          Editar email
                         </button>
                         <button onClick={() => { setUsuarioReset(u); setNuevaPassword(""); setErrorReset("") }}
                           className="text-blue-500 text-xs hover:underline">
@@ -383,6 +429,35 @@ export default function UsuariosPage() {
                 {guardandoRut ? "Guardando..." : "Guardar RUT"}
               </button>
               <button onClick={() => setUsuarioRut(null)}
+                className="px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal editar email */}
+      {usuarioEmail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-800">Editar email</h3>
+            <p className="text-sm text-gray-500">Usuario: <span className="font-medium">{usuarioEmail.name}</span></p>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input type="email" value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                autoFocus
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="correo@municipalidadollague.cl" />
+              <p className="text-xs text-gray-400 mt-1">Usado para recibir alertas por correo (vencimientos, kilometraje, etc.)</p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={handleGuardarEmail} disabled={guardandoEmail}
+                className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-semibold text-sm hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                {guardandoEmail ? "Guardando..." : "Guardar email"}
+              </button>
+              <button onClick={() => setUsuarioEmail(null)}
                 className="px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">
                 Cancelar
               </button>

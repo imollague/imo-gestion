@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { transporter, EMAIL_FROM, EMAIL_ADMINS } from "@/lib/mailer"
+import { transporter, EMAIL_FROM, destinatariosAlerta } from "@/lib/mailer"
+import { verificarCronSecret } from "@/lib/cronAuth"
 
-// Endpoint protegido por CRON_SECRET (se llama desde cron externo o cron interno)
+// Endpoint protegido por CRON_SECRET (Vercel Cron o llamada manual)
 export async function GET(req: NextRequest) {
-  const secret = req.headers.get("x-cron-secret")
-  if (secret !== process.env.CRON_SECRET) {
+  if (!verificarCronSecret(req)) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 })
   }
 
-  if (EMAIL_ADMINS.length === 0) {
-    return NextResponse.json({ mensaje: "No hay destinatarios configurados (ALERT_EMAILS)" })
+  const destinatarios = await destinatariosAlerta(["ADMIN", "ENCARGADO"])
+  if (destinatarios.length === 0) {
+    return NextResponse.json({ mensaje: "No hay destinatarios configurados (ALERT_EMAILS o email de usuarios ADMIN/ENCARGADO)" })
   }
 
   const ahora = new Date()
@@ -64,6 +65,36 @@ export async function GET(req: NextRequest) {
     }),
   ])
 
+  // Alerta de mantención por uso (km u horas, según tipo de vehículo)
+  const [vehiculosActivos, intervalosUso] = await Promise.all([
+    prisma.vehiculo.findMany({
+      where: { activo: true },
+      select: { id: true, patente: true, numeroInterno: true, tipo: true, unidadMedidaUso: true, kmActual: true, horasUso: true, usoUltimaAlerta: true },
+    }),
+    prisma.intervaloUsoTipoVehiculo.findMany({ where: { intervalo: { not: null } } }),
+  ])
+  const intervaloPorTipo = new Map(intervalosUso.map((i) => [i.tipo, i.intervalo!]))
+
+  const vehiculosMantencion: { etiqueta: string; usoActual: number; unidad: string }[] = []
+  for (const v of vehiculosActivos) {
+    const intervalo = intervaloPorTipo.get(v.tipo)
+    if (!intervalo) continue
+    const usoActual = v.unidadMedidaUso === "HORAS" ? v.horasUso : v.kmActual
+    if (v.usoUltimaAlerta == null) {
+      // primera vez bajo este sistema: fija la línea base sin alertar
+      await prisma.vehiculo.update({ where: { id: v.id }, data: { usoUltimaAlerta: usoActual } })
+      continue
+    }
+    if (usoActual - v.usoUltimaAlerta >= intervalo) {
+      vehiculosMantencion.push({
+        etiqueta: v.patente ?? v.numeroInterno ?? `Vehículo #${v.id}`,
+        usoActual,
+        unidad: v.unidadMedidaUso === "HORAS" ? "horas" : "km",
+      })
+      await prisma.vehiculo.update({ where: { id: v.id }, data: { usoUltimaAlerta: usoActual } })
+    }
+  }
+
   const vehiculosVencidos = vencimientosVehiculo
     .filter((ve) => ve.fechaVencimiento < ahora)
     .sort((a, b) => a.fechaVencimiento.getTime() - b.fechaVencimiento.getTime())
@@ -82,7 +113,8 @@ export async function GET(req: NextRequest) {
     lotesVencidos.length > 0 ||
     lotesPorVencer.length > 0 ||
     vehiculosVencidos.length > 0 ||
-    vehiculosPorVencer.length > 0
+    vehiculosPorVencer.length > 0 ||
+    vehiculosMantencion.length > 0
 
   if (!hayAlertas) {
     return NextResponse.json({ mensaje: "Sin alertas activas, no se envió email" })
@@ -204,6 +236,21 @@ export async function GET(req: NextRequest) {
     </table>
   ` : ""
 
+  const seccionVehiculosMantencion = vehiculosMantencion.length > 0 ? `
+    <h3 style="color:#7c3aed;margin-top:20px">🔧 Flota: Vehículos que alcanzaron el intervalo de mantención (${vehiculosMantencion.length})</h3>
+    <table border="0" cellpadding="6" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead style="background:#f5f3ff"><tr>
+        <th align="left" style="border-bottom:1px solid #ddd6fe">Vehículo</th>
+        <th align="right" style="border-bottom:1px solid #ddd6fe">Uso actual</th>
+      </tr></thead>
+      <tbody>${rows(vehiculosMantencion.map((v) => `
+        <td style="border-bottom:1px solid #f1f5f9;font-family:monospace">${v.etiqueta}</td>
+        <td align="right" style="border-bottom:1px solid #f1f5f9;color:#7c3aed;font-weight:bold">${v.usoActual.toLocaleString("es-CL")} ${v.unidad}</td>
+      `))}
+      </tbody>
+    </table>
+  ` : ""
+
   const html = `
     <div style="font-family:sans-serif;max-width:650px;margin:0 auto;padding:24px">
       <h2 style="margin:0 0 4px">Alerta de inventario — IMO Stock</h2>
@@ -215,6 +262,7 @@ export async function GET(req: NextRequest) {
       ${seccionLotesPorVencer}
       ${seccionVehiculosVencidos}
       ${seccionVehiculosPorVencer}
+      ${seccionVehiculosMantencion}
       <hr style="border:none;border-top:1px solid #e5e7eb;margin-top:24px;margin-bottom:12px">
       <p style="color:#9ca3af;font-size:11px;margin:0">Este mensaje fue generado automáticamente por IMO Stock. No responder este email.</p>
     </div>
@@ -222,14 +270,14 @@ export async function GET(req: NextRequest) {
 
   await transporter.sendMail({
     from: EMAIL_FROM,
-    to: EMAIL_ADMINS.join(", "),
+    to: destinatarios.join(", "),
     subject: `[IMO Stock] Alerta de inventario — ${formatFecha(ahora)}`,
     html,
   })
 
   return NextResponse.json({
     mensaje: "Email enviado",
-    destinatariosCount: EMAIL_ADMINS.length,
+    destinatariosCount: destinatarios.length,
     alertas: {
       productosCriticos: productosCriticos.length,
       medicamentosCriticos: medicamentosCriticos.length,
@@ -237,6 +285,7 @@ export async function GET(req: NextRequest) {
       lotesPorVencer: lotesPorVencer.length,
       vehiculosVencidos: vehiculosVencidos.length,
       vehiculosPorVencer: vehiculosPorVencer.length,
+      vehiculosMantencion: vehiculosMantencion.length,
     },
   })
   } catch (error) {

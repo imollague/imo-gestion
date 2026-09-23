@@ -9,6 +9,7 @@ const SELECT_USUARIO = {
   username: true,
   name: true,
   rut: true,
+  email: true,
   role: true,
   roleAnterior: true,
   roleExpiration: true,
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
   if (session.user.role !== "ADMIN") return NextResponse.json({ error: "Sin permisos" }, { status: 403 })
 
   const body = await req.json()
-  const { username, name, password, role, rut } = body
+  const { username, name, password, role, rut, email } = body
 
   if (!username || !name || !password) {
     return NextResponse.json({ error: "Faltan campos requeridos" }, { status: 400 })
@@ -58,6 +59,7 @@ export async function POST(req: NextRequest) {
       password: hashedPassword,
       role: role || "VIEWER",
       rut: rut?.trim() || null,
+      email: email?.trim() || null,
     },
     select: SELECT_USUARIO,
   })
@@ -71,7 +73,7 @@ export async function PUT(req: NextRequest) {
   if (session.user.role !== "ADMIN") return NextResponse.json({ error: "Sin permisos" }, { status: 403 })
 
   const body = await req.json()
-  const { id, role, active, password, nombre, rut, roleExpiration } = body
+  const { id, role, active, password, nombre, rut, email, roleExpiration } = body
 
   if (!id) return NextResponse.json({ error: "ID requerido" }, { status: 400 })
 
@@ -89,6 +91,7 @@ export async function PUT(req: NextRequest) {
   if (password) datosActualizar.password = await bcrypt.hash(password, 10)
   if (nombre) datosActualizar.name = nombre
   if (rut !== undefined) datosActualizar.rut = rut?.trim() || null
+  if (email !== undefined) datosActualizar.email = email?.trim() || null
   if (role) {
     datosActualizar.role = role
     if (roleExpiration) {

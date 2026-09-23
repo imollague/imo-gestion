@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/alertas-email",
+      "schedule": "30 11 * * *"
+    },
+    {
+      "path": "/api/cron/revertir-roles",
+      "schedule": "5 3 * * *"
+    }
+  ]
+}
