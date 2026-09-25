@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireRole } from "@/lib/apiAuth"
-import { uploadFile, deleteFile, extractStoragePath } from "@/lib/storage"
+import { uploadFile, deleteFile, extractStoragePath, toProxyUrl } from "@/lib/storage"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRole("ADMIN", "ENCARGADO")
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     data: { imagenUrl: publicUrl },
   })
 
-  return NextResponse.json({ imagenUrl: vehiculo.imagenUrl })
+  return NextResponse.json({ imagenUrl: toProxyUrl(vehiculo.imagenUrl) })
 }
 
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {

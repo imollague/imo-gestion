@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 })
   }
 
-  const destinatarios = await destinatariosAlerta(["ADMIN", "ENCARGADO"])
+  const destinatarios = await destinatariosAlerta(["ADMIN", "ENCARGADO", "MANTENIMIENTO"])
   if (destinatarios.length === 0) {
     return NextResponse.json({ mensaje: "No hay destinatarios configurados (ALERT_EMAILS o email de usuarios ADMIN/ENCARGADO)" })
   }
@@ -95,6 +95,31 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Alerta de periodicidad de Mantenimiento: actividades que llevan más días sin registrarse que su intervalo configurado
+  const actividadesConAlerta = await prisma.actividadMantenimiento.findMany({
+    where: { activo: true, intervaloDiasAlerta: { not: null } },
+    include: { bloques: { orderBy: { fecha: "desc" }, take: 1 } },
+  })
+
+  const actividadesAtrasadas: { nombre: string; diasSinRegistrar: number; nunca: boolean }[] = []
+  for (const a of actividadesConAlerta) {
+    const ultimoBloque = a.bloques[0]
+    const diasSinRegistrar = ultimoBloque
+      ? Math.floor((ahora.getTime() - ultimoBloque.fecha.getTime()) / 86400000)
+      : null
+
+    const atrasada = diasSinRegistrar === null || diasSinRegistrar >= a.intervaloDiasAlerta!
+    if (!atrasada) continue
+
+    // Ya se avisó de este atraso hace menos de un intervalo: no repetir todos los días
+    if (a.ultimaAlertaEnviada && ahora.getTime() - a.ultimaAlertaEnviada.getTime() < a.intervaloDiasAlerta! * 86400000) {
+      continue
+    }
+
+    actividadesAtrasadas.push({ nombre: a.nombre, diasSinRegistrar: diasSinRegistrar ?? -1, nunca: diasSinRegistrar === null })
+    await prisma.actividadMantenimiento.update({ where: { id: a.id }, data: { ultimaAlertaEnviada: ahora } })
+  }
+
   const vehiculosVencidos = vencimientosVehiculo
     .filter((ve) => ve.fechaVencimiento < ahora)
     .sort((a, b) => a.fechaVencimiento.getTime() - b.fechaVencimiento.getTime())
@@ -114,7 +139,8 @@ export async function GET(req: NextRequest) {
     lotesPorVencer.length > 0 ||
     vehiculosVencidos.length > 0 ||
     vehiculosPorVencer.length > 0 ||
-    vehiculosMantencion.length > 0
+    vehiculosMantencion.length > 0 ||
+    actividadesAtrasadas.length > 0
 
   if (!hayAlertas) {
     return NextResponse.json({ mensaje: "Sin alertas activas, no se envió email" })
@@ -251,6 +277,21 @@ export async function GET(req: NextRequest) {
     </table>
   ` : ""
 
+  const seccionActividadesAtrasadas = actividadesAtrasadas.length > 0 ? `
+    <h3 style="color:#be185d;margin-top:20px">🔧 Mantenimiento: Actividades atrasadas (${actividadesAtrasadas.length})</h3>
+    <table border="0" cellpadding="6" cellspacing="0" style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead style="background:#fdf2f8"><tr>
+        <th align="left" style="border-bottom:1px solid #fbcfe8">Actividad</th>
+        <th align="right" style="border-bottom:1px solid #fbcfe8">Estado</th>
+      </tr></thead>
+      <tbody>${rows(actividadesAtrasadas.map((a) => `
+        <td style="border-bottom:1px solid #f1f5f9">${a.nombre}</td>
+        <td align="right" style="border-bottom:1px solid #f1f5f9;color:#be185d;font-weight:bold">${a.nunca ? "Nunca registrada" : `${a.diasSinRegistrar} días sin registrar`}</td>
+      `))}
+      </tbody>
+    </table>
+  ` : ""
+
   const html = `
     <div style="font-family:sans-serif;max-width:650px;margin:0 auto;padding:24px">
       <h2 style="margin:0 0 4px">Alerta de inventario — IMO Stock</h2>
@@ -263,6 +304,7 @@ export async function GET(req: NextRequest) {
       ${seccionVehiculosVencidos}
       ${seccionVehiculosPorVencer}
       ${seccionVehiculosMantencion}
+      ${seccionActividadesAtrasadas}
       <hr style="border:none;border-top:1px solid #e5e7eb;margin-top:24px;margin-bottom:12px">
       <p style="color:#9ca3af;font-size:11px;margin:0">Este mensaje fue generado automáticamente por IMO Stock. No responder este email.</p>
     </div>
@@ -286,6 +328,7 @@ export async function GET(req: NextRequest) {
       vehiculosVencidos: vehiculosVencidos.length,
       vehiculosPorVencer: vehiculosPorVencer.length,
       vehiculosMantencion: vehiculosMantencion.length,
+      actividadesAtrasadas: actividadesAtrasadas.length,
     },
   })
   } catch (error) {

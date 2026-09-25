@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireRole } from "@/lib/apiAuth"
-import { uploadFile, deleteFile, extractStoragePath } from "@/lib/storage"
+import { uploadFile, deleteFile, extractStoragePath, toProxyUrl } from "@/lib/storage"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRole("ADMIN", "ENCARGADO")
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     },
   })
 
-  return NextResponse.json(documento, { status: 201 })
+  return NextResponse.json({ ...documento, url: toProxyUrl(documento.url) }, { status: 201 })
 }
 
 export async function DELETE(req: NextRequest, _ctx: { params: Promise<{ id: string }> }) {

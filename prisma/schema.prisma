@@ -52,6 +52,12 @@ model User {
   actasRetiroCreadaPor            ActaRetiroSanitario[]  @relation("ActasRetiroCreadaPor")
   actasRetiroJefeSeleccionado     ActaRetiroSanitario[]  @relation("ActasRetiroJefeSeleccionado")
   actasRetiroFirmadaJefe          ActaRetiroSanitario[]  @relation("ActasRetiroFirmadaJefe")
+  registrosMantenimiento          RegistroMantenimiento[]
+  bloquesMantenimiento            BloqueMantenimiento[]
+  bloquesEditados                 BloqueMantenimiento[]         @relation("BloqueEditadoPor")
+  versionesBloqueEditadas         BloqueMantenimientoVersion[]  @relation("BloqueVersionEditadoPor")
+  hallazgosCreados                HallazgoMantenimiento[]       @relation("HallazgoCreadoPor")
+  hallazgosCerrados               HallazgoMantenimiento[]       @relation("HallazgoCerradoPor")
 }
 
 // ─── MÓDULO FIRMA ELECTRÓNICA (FirmaGob) ──────────────
@@ -219,6 +225,7 @@ enum Role {
   FARMACIA
   FLOTA
   ENCARGADO
+  MANTENIMIENTO
   VIEWER
 }
 
@@ -734,4 +741,131 @@ model ObservacionArchivo {
   subidoPorId   Int
   subidoPor     User                 @relation(fields: [subidoPorId], references: [id])
   fecha         DateTime             @default(now())
+}
+
+// ─── MÓDULO MANTENIMIENTO ──────────────────────────────
+// Registro de actividades de mantención (planta de agua potable, motores, etc.)
+// Catálogo de actividades y campos editable por ADMIN/ENCARGADO; el registro
+// en sí lo hace el operador (rol MANTENIMIENTO) llenando los campos + fotos.
+
+enum TipoCampoMantenimiento {
+  TEXTO
+  FECHA_HORA
+  NUMERO
+}
+
+model ActividadMantenimiento {
+  id     Int     @id @default(autoincrement())
+  nombre String
+  orden  Int     @default(0)
+  activo Boolean @default(true)
+
+  // Alerta de periodicidad: si pasan más de este # de días sin un bloque nuevo
+  // de esta actividad (en cualquier registro), se avisa por correo. null = sin alerta.
+  intervaloDiasAlerta Int?
+  ultimaAlertaEnviada DateTime?
+
+  campos  CampoActividadMantenimiento[]
+  bloques BloqueMantenimiento[]
+}
+
+model CampoActividadMantenimiento {
+  id             Int                    @id @default(autoincrement())
+  actividadId    Int
+  actividad      ActividadMantenimiento @relation(fields: [actividadId], references: [id])
+  descripcion    String
+  tipo           TipoCampoMantenimiento @default(TEXTO)
+  requiereImagen Boolean                @default(false)
+  orden          Int                    @default(0)
+  activo         Boolean                @default(true)
+
+  // Solo aplican si tipo = NUMERO; fuera de este rango se marca como advertencia
+  valorMin Float?
+  valorMax Float?
+
+  respuestas RespuestaMantenimiento[]
+}
+
+// Equipo o lugar al que puede asociarse un registro (motor, bomba, estanque, etc.)
+model ActivoMantenimiento {
+  id     Int     @id @default(autoincrement())
+  nombre String
+  activo Boolean @default(true)
+
+  registros RegistroMantenimiento[]
+}
+
+// Contenedor de una "visita"/jornada de mantención. El operador la crea y le
+// va agregando bloques (uno por actividad) de a poco, no necesariamente todo junto.
+model RegistroMantenimiento {
+  id          Int                  @id @default(autoincrement())
+  creadoPorId Int
+  creadoPor   User                 @relation(fields: [creadoPorId], references: [id])
+  fecha       DateTime             @default(now())
+  activoId    Int?
+  activo      ActivoMantenimiento? @relation(fields: [activoId], references: [id])
+
+  bloques BloqueMantenimiento[]
+}
+
+// Los datos de una actividad puntual dentro de un registro (ej. "Cloración" del 21-sep)
+model BloqueMantenimiento {
+  id            Int                    @id @default(autoincrement())
+  registroId    Int
+  registro      RegistroMantenimiento  @relation(fields: [registroId], references: [id])
+  actividadId   Int
+  actividad     ActividadMantenimiento @relation(fields: [actividadId], references: [id])
+  creadoPorId   Int
+  creadoPor     User                   @relation(fields: [creadoPorId], references: [id])
+  fecha         DateTime               @default(now())
+  observaciones String?
+
+  editadoPorId Int?
+  editadoPor   User?     @relation("BloqueEditadoPor", fields: [editadoPorId], references: [id])
+  fechaEdicion DateTime?
+
+  respuestas RespuestaMantenimiento[]
+  versiones  BloqueMantenimientoVersion[]
+  hallazgos  HallazgoMantenimiento[]
+
+  @@unique([registroId, actividadId])
+}
+
+// Snapshot de un bloque justo antes de ser editado, para mantener histórico de correcciones
+model BloqueMantenimientoVersion {
+  id           Int                 @id @default(autoincrement())
+  bloqueId     Int
+  bloque       BloqueMantenimiento @relation(fields: [bloqueId], references: [id])
+  datos        Json // snapshot: { observaciones, respuestas: [{ campoId, descripcion, valor, imagenUrl }] }
+  editadoPorId Int
+  editadoPor   User                @relation("BloqueVersionEditadoPor", fields: [editadoPorId], references: [id])
+  fecha        DateTime            @default(now())
+}
+
+// Hallazgo/anomalía detectada durante una actividad, seguible hasta su cierre
+model HallazgoMantenimiento {
+  id           Int                 @id @default(autoincrement())
+  bloqueId     Int
+  bloque       BloqueMantenimiento @relation(fields: [bloqueId], references: [id])
+  descripcion  String
+  estado       String              @default("ABIERTA") // ABIERTA | CERRADA
+  creadoPorId  Int
+  creadoPor    User                @relation("HallazgoCreadoPor", fields: [creadoPorId], references: [id])
+  fecha        DateTime            @default(now())
+  cerradoPorId Int?
+  cerradoPor   User?               @relation("HallazgoCerradoPor", fields: [cerradoPorId], references: [id])
+  fechaCierre  DateTime?
+  notaCierre   String?
+}
+
+model RespuestaMantenimiento {
+  id        Int                         @id @default(autoincrement())
+  bloqueId  Int
+  bloque    BloqueMantenimiento         @relation(fields: [bloqueId], references: [id])
+  campoId   Int
+  campo     CampoActividadMantenimiento @relation(fields: [campoId], references: [id])
+  valor     String
+  imagenUrl String?
+
+  @@unique([bloqueId, campoId])
 }

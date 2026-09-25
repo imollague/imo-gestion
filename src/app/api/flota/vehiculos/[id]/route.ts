@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { prisma } from "@/lib/prisma"
 import { requireRole } from "@/lib/apiAuth"
+import { toProxyUrl } from "@/lib/storage"
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
@@ -32,7 +33,11 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   })
 
   if (!vehiculo) return NextResponse.json({ error: "No encontrado" }, { status: 404 })
-  return NextResponse.json(vehiculo)
+  return NextResponse.json({
+    ...vehiculo,
+    imagenUrl: toProxyUrl(vehiculo.imagenUrl),
+    documentos: vehiculo.documentos.map((d) => ({ ...d, url: toProxyUrl(d.url)! })),
+  })
 }
 
 const PATENTE_RE = /^[A-Z]{2}\d{4}$|^[A-Z]{4}\d{2}$/

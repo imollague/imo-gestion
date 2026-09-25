@@ -8,6 +8,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   FARMACIA: "Farmacia",
   FLOTA: "Conductor",
   ENCARGADO: "Encargado de Vehículos",
+  MANTENIMIENTO: "Mantenimiento",
   VIEWER: "Solo lectura",
 }
 

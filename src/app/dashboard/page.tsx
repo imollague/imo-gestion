@@ -48,6 +48,13 @@ export default function DashboardPage() {
           </a>
         )}
 
+        {(role === "ADMIN" || role === "ENCARGADO" || role === "MANTENIMIENTO") && (
+          <a href="/mantenimiento" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow border-l-4 border-teal-500">
+            <h3 className="text-lg font-semibold text-gray-800">Mantenimiento</h3>
+            <p className="text-gray-500 text-sm mt-1">Registro de actividades de mantención</p>
+          </a>
+        )}
+
         {role === "ADMIN" && (
           <a href="/admin/usuarios" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow border-l-4 border-purple-500">
             <h3 className="text-lg font-semibold text-gray-800">Administración</h3>
