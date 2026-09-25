@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireRole } from "@/lib/apiAuth"
-import { uploadFile, deleteFile, extractStoragePath, toProxyUrl } from "@/lib/storage"
+import { uploadFile, deleteFile, extractStoragePath, toProxyUrl, esImagenValida } from "@/lib/storage"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRole("ADMIN", "ENCARGADO")
@@ -17,6 +17,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const ext = archivo.name.split(".").pop()?.toLowerCase() ?? "jpg"
   const storagePath = `vehiculos/${vehiculoId}/imagen.${ext}`
   const buffer = Buffer.from(await archivo.arrayBuffer())
+
+  if (!esImagenValida(buffer)) return NextResponse.json({ error: "El archivo debe ser una imagen (jpg, png, webp o gif)" }, { status: 400 })
 
   // Eliminar imagen anterior si existe
   const vehiculoActual = await prisma.vehiculo.findUnique({ where: { id: vehiculoId } })

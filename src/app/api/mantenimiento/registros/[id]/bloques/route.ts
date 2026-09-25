@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireRole } from "@/lib/apiAuth"
-import { uploadFile, toProxyUrl } from "@/lib/storage"
+import { uploadFile, toProxyUrl, esImagenValida } from "@/lib/storage"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRole("ADMIN", "ENCARGADO", "MANTENIMIENTO")
@@ -51,8 +51,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (campo.tipo === "NUMERO" && isNaN(Number(respuesta.valor))) {
       return NextResponse.json({ error: `${campo.descripcion} debe ser un número` }, { status: 400 })
     }
-    if (campo.requiereImagen && !(formData.get(`imagen_${campo.id}`) instanceof File)) {
-      return NextResponse.json({ error: `Falta la foto de: ${campo.descripcion}` }, { status: 400 })
+    if (campo.requiereImagen) {
+      const imagenCampo = formData.get(`imagen_${campo.id}`)
+      if (!(imagenCampo instanceof File)) {
+        return NextResponse.json({ error: `Falta la foto de: ${campo.descripcion}` }, { status: 400 })
+      }
+      if (!esImagenValida(Buffer.from(await imagenCampo.arrayBuffer()))) {
+        return NextResponse.json({ error: `La foto de "${campo.descripcion}" no es una imagen válida` }, { status: 400 })
+      }
     }
   }
 

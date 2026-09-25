@@ -3,6 +3,9 @@ import CredentialsProvider from "next-auth/providers/credentials"
 import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 
+const MAX_INTENTOS = 5
+const BLOQUEO_MINUTOS = 15
+
 export const authOptions = {
   providers: [
     CredentialsProvider({
@@ -21,8 +24,30 @@ export const authOptions = {
 
         if (!user || !user.active) return null
 
+        if (user.bloqueadoHasta && user.bloqueadoHasta > new Date()) {
+          const minutosRestantes = Math.ceil((user.bloqueadoHasta.getTime() - Date.now()) / 60000)
+          throw new Error(`Demasiados intentos fallidos. Intenta de nuevo en ${minutosRestantes} minuto${minutosRestantes === 1 ? "" : "s"}.`)
+        }
+
         const passwordMatch = await bcrypt.compare(credentials.password, user.password)
-        if (!passwordMatch) return null
+        if (!passwordMatch) {
+          const intentos = user.intentosFallidos + 1
+          await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              intentosFallidos: intentos,
+              bloqueadoHasta: intentos >= MAX_INTENTOS ? new Date(Date.now() + BLOQUEO_MINUTOS * 60000) : user.bloqueadoHasta,
+            },
+          })
+          return null
+        }
+
+        if (user.intentosFallidos > 0 || user.bloqueadoHasta) {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { intentosFallidos: 0, bloqueadoHasta: null },
+          })
+        }
 
         return {
           id: String(user.id),
