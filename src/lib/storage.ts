@@ -4,9 +4,26 @@ import fs from "fs/promises"
 const IS_LOCAL = process.env.STORAGE_LOCAL === "true"
 const UPLOADS_DIR = path.join(process.cwd(), "public", "uploads")
 
+export const MAX_FILE_SIZE = 15 * 1024 * 1024 // 15 MB
+
 // Garantiza que el directorio exista
 async function ensureDir(filePath: string) {
   await fs.mkdir(path.dirname(filePath), { recursive: true })
+}
+
+/** Firma de bytes real del archivo (no confía en el Content-Type que manda el navegador). */
+export function esImagenValida(buffer: Buffer): boolean {
+  if (buffer.length < 12) return false
+  const hex = buffer.subarray(0, 12).toString("hex")
+  if (hex.startsWith("ffd8ff")) return true // JPEG
+  if (hex.startsWith("89504e47")) return true // PNG
+  if (hex.startsWith("47494638")) return true // GIF
+  if (hex.startsWith("52494646") && buffer.subarray(8, 12).toString("ascii") === "WEBP") return true // WEBP
+  return false
+}
+
+export function esPdfValido(buffer: Buffer): boolean {
+  return buffer.subarray(0, 5).toString("ascii") === "%PDF-"
 }
 
 export async function uploadFile(
@@ -14,6 +31,10 @@ export async function uploadFile(
   buffer: Buffer,
   contentType: string
 ): Promise<{ publicUrl: string; error: null } | { publicUrl: null; error: string }> {
+  if (buffer.length > MAX_FILE_SIZE) {
+    return { publicUrl: null, error: `Archivo demasiado grande (máx. ${MAX_FILE_SIZE / 1024 / 1024} MB)` }
+  }
+
   if (IS_LOCAL) {
     try {
       const absPath = path.join(UPLOADS_DIR, storagePath)

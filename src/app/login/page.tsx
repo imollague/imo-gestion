@@ -23,7 +23,7 @@ export default function LoginPage() {
     })
 
     if (result?.error) {
-      setError("Usuario o contraseña incorrectos")
+      setError(result.error === "CredentialsSignin" ? "Usuario o contraseña incorrectos" : result.error)
       setLoading(false)
     } else {
       router.push("/dashboard")

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireRole } from "@/lib/apiAuth"
-import { uploadFile, deleteFile, extractStoragePath, toProxyUrl } from "@/lib/storage"
+import { uploadFile, deleteFile, extractStoragePath, toProxyUrl, esImagenValida, esPdfValido } from "@/lib/storage"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRole("ADMIN", "ENCARGADO")
@@ -22,6 +22,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const ext = archivo.name.split(".").pop()?.toLowerCase() ?? "bin"
   const storagePath = `vehiculos/${vehiculoId}/${Date.now()}-${nombre.replace(/[^a-z0-9]/gi, "_")}.${ext}`
   const buffer = Buffer.from(await archivo.arrayBuffer())
+
+  if (!esPdfValido(buffer) && !esImagenValida(buffer)) {
+    return NextResponse.json({ error: "El archivo debe ser un PDF o una imagen (jpg, png, webp)" }, { status: 400 })
+  }
 
   const { publicUrl, error } = await uploadFile(storagePath, buffer, archivo.type)
   if (error) return NextResponse.json({ error: `Error al subir archivo: ${error}` }, { status: 500 })

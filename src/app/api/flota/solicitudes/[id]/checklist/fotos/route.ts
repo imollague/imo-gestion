@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireRole, denyIfNotOwner } from "@/lib/apiAuth"
-import { uploadFile, deleteFile, extractStoragePath, toProxyUrl } from "@/lib/storage"
+import { uploadFile, deleteFile, extractStoragePath, toProxyUrl, esImagenValida } from "@/lib/storage"
 
 const TIPOS_VALIDOS = ["FRONTAL", "LATERAL_IZQ", "LATERAL_DER", "POSTERIOR"]
 
@@ -38,6 +38,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const ext = archivo.name.split(".").pop()?.toLowerCase() ?? "jpg"
   const storagePath = `solicitudes/${solicitudId}/revision/${tipo.toLowerCase()}.${ext}`
   const buffer = Buffer.from(await archivo.arrayBuffer())
+
+  if (!esImagenValida(buffer)) return NextResponse.json({ error: "El archivo debe ser una imagen (jpg, png, webp o gif)" }, { status: 400 })
 
   const { publicUrl, error } = await uploadFile(storagePath, buffer, archivo.type)
   if (error) return NextResponse.json({ error }, { status: 500 })
