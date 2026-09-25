@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireRole, denyIfNotOwner } from "@/lib/apiAuth"
+import { toProxyUrl } from "@/lib/storage"
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRole("ADMIN", "FLOTA", "ENCARGADO")
@@ -55,11 +56,24 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   const deny = denyIfNotOwner(auth, solicitud.creadoPorId)
   if (deny) return deny
 
-  const documentoFirmadoOS = await prisma.documentoFirmado.findFirst({
+  const documentoFirmadoOSRaw = await prisma.documentoFirmado.findFirst({
     where: { origen: "ORDEN_SERVICIO_FLOTA", origenId: parseInt(id) },
     select: { urlFirmado: true, urlOriginal: true, estado: true, firmadoEn: true },
     orderBy: { id: "desc" },
   })
+  const documentoFirmadoOS = documentoFirmadoOSRaw && {
+    ...documentoFirmadoOSRaw,
+    urlFirmado: toProxyUrl(documentoFirmadoOSRaw.urlFirmado),
+    urlOriginal: toProxyUrl(documentoFirmadoOSRaw.urlOriginal),
+  }
 
-  return NextResponse.json({ ...solicitud, documentoFirmadoOS })
+  return NextResponse.json({
+    ...solicitud,
+    fotosRevision: solicitud.fotosRevision.map((f) => ({ ...f, url: toProxyUrl(f.url)! })),
+    observacionesSolicitud: solicitud.observacionesSolicitud.map((o) => ({
+      ...o,
+      archivos: o.archivos.map((a) => ({ ...a, url: toProxyUrl(a.url)! })),
+    })),
+    documentoFirmadoOS,
+  })
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireRole, denyIfNotOwner } from "@/lib/apiAuth"
-import { uploadFile, deleteFile, extractStoragePath } from "@/lib/storage"
+import { uploadFile, deleteFile, extractStoragePath, toProxyUrl } from "@/lib/storage"
 
 const TIPOS_VALIDOS = ["FRONTAL", "LATERAL_IZQ", "LATERAL_DER", "POSTERIOR"]
 
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     data: { solicitudId, tipo, url: publicUrl! },
   })
 
-  return NextResponse.json(foto, { status: 201 })
+  return NextResponse.json({ ...foto, url: toProxyUrl(foto.url) }, { status: 201 })
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
