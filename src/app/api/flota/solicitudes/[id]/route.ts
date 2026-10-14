@@ -74,6 +74,10 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
       ...o,
       archivos: o.archivos.map((a) => ({ ...a, url: toProxyUrl(a.url)! })),
     })),
+    bitacora: solicitud.bitacora && {
+      ...solicitud.bitacora,
+      paradas: solicitud.bitacora.paradas.map((p) => ({ ...p, comprobanteFotoUrl: toProxyUrl(p.comprobanteFotoUrl) })),
+    },
     documentoFirmadoOS,
   })
 }
