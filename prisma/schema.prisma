@@ -624,6 +624,7 @@ model ParadaViaje {
   descripcion    String?
   litros         Float?
   comprobanteRef String?
+  comprobanteFotoUrl String?
   fecha          DateTime        @default(now())
   pasajeros      PasajeroViaje[]
 }

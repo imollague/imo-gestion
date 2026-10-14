@@ -12,7 +12,7 @@ import { formatearRut } from "@/lib/validarRut"
 interface ChecklistItem { id: number; categoria: string; descripcion: string; orden: number }
 interface ChecklistRespuesta { itemId: number; valor: string; observacion: string }
 interface PasajeroViaje { id: number; nombre: string; rut: string | null }
-interface ParadaViaje { id: number; km: number; descripcion: string | null; litros: number | null; comprobanteRef: string | null; fecha: string; pasajeros: PasajeroViaje[] }
+interface ParadaViaje { id: number; km: number; descripcion: string | null; litros: number | null; comprobanteRef: string | null; comprobanteFotoUrl: string | null; fecha: string; pasajeros: PasajeroViaje[] }
 interface FotoRevision { id: number; tipo: string; url: string }
 interface PasajeroForm { nombre: string; rut: string }
 interface ObsNota { id: number; texto: string; fecha: string; autor: { name: string } }
@@ -553,6 +553,7 @@ function PasoBitacora({ solicitudId, bitacora, kmActualVehiculo, onDone }: {
   const [paradaForm, setParadaForm] = useState({ km: "", descripcion: "", litros: "", comprobanteRef: "" })
   const [paradaPasajeros, setParadaPasajeros] = useState<PasajeroForm[]>([])
   const [mostrarCombustible, setMostrarCombustible] = useState(false)
+  const [comprobanteFoto, setComprobanteFoto] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
@@ -573,23 +574,32 @@ function PasoBitacora({ solicitudId, bitacora, kmActualVehiculo, onDone }: {
     if (!paradaForm.km) { setError("El km es obligatorio"); return }
     if (mostrarCombustible && !paradaForm.litros) { setError("Ingresa los litros cargados"); return }
     setLoading(true)
+    const formData = new FormData()
+    formData.append("km", paradaForm.km)
+    if (paradaForm.descripcion) formData.append("descripcion", paradaForm.descripcion)
+    if (mostrarCombustible) {
+      formData.append("litros", paradaForm.litros)
+      if (paradaForm.comprobanteRef) formData.append("comprobanteRef", paradaForm.comprobanteRef)
+      if (comprobanteFoto) formData.append("comprobanteFoto", comprobanteFoto)
+    }
+    if (paradaPasajeros.length > 0) formData.append("pasajeros", JSON.stringify(paradaPasajeros))
+
     const res = await fetch(`/api/flota/solicitudes/${solicitudId}/bitacora/parada`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        km: paradaForm.km,
-        descripcion: paradaForm.descripcion || null,
-        litros: mostrarCombustible ? paradaForm.litros : null,
-        comprobanteRef: mostrarCombustible ? paradaForm.comprobanteRef || null : null,
-        pasajeros: paradaPasajeros.length > 0 ? paradaPasajeros : undefined,
-      }),
+      body: formData,
     })
     setLoading(false)
     if (!res.ok) { const d = await res.json(); setError(d.error); return }
     setParadaForm({ km: "", descripcion: "", litros: "", comprobanteRef: "" })
     setParadaPasajeros([])
     setMostrarCombustible(false)
+    setComprobanteFoto(null)
     onDone()
+  }
+
+  const elegirFotoComprobante = async (file: File | null) => {
+    if (!file) { setComprobanteFoto(null); return }
+    setComprobanteFoto(await comprimirImagen(file, { maxAncho: 1200, maxAlto: 1200, calidad: 0.6 }))
   }
 
   const registrarLlegada = async () => {
@@ -658,6 +668,11 @@ function PasoBitacora({ solicitudId, bitacora, kmActualVehiculo, onDone }: {
                         <span className="text-blue-600 text-xs font-medium">
                           ⛽ {p.litros} L{p.comprobanteRef ? ` · ${p.comprobanteRef}` : ""}
                         </span>
+                      )}
+                      {p.comprobanteFotoUrl && (
+                        <a href={p.comprobanteFotoUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline">
+                          📷 Ver comprobante
+                        </a>
                       )}
                     </div>
                     {p.pasajeros.length > 0 && (
@@ -730,9 +745,17 @@ function PasoBitacora({ solicitudId, bitacora, kmActualVehiculo, onDone }: {
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">N° comprobante</label>
-                <input value={paradaForm.comprobanteRef}
-                  onChange={(e) => setParadaForm((f) => ({ ...f, comprobanteRef: e.target.value }))}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                <div className="flex items-center gap-2">
+                  <input value={paradaForm.comprobanteRef}
+                    onChange={(e) => setParadaForm((f) => ({ ...f, comprobanteRef: e.target.value }))}
+                    className="flex-1 min-w-0 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  <label className="shrink-0 inline-flex items-center justify-center w-9 h-9 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg cursor-pointer transition-colors" title="Adjuntar foto del comprobante">
+                    📷
+                    <input type="file" accept="image/*" capture="environment" className="hidden"
+                      onChange={(e) => elegirFotoComprobante(e.target.files?.[0] ?? null)} />
+                  </label>
+                </div>
+                {comprobanteFoto && <p className="text-xs text-green-600 mt-1">✓ Foto del comprobante lista</p>}
               </div>
             </div>
           )}
