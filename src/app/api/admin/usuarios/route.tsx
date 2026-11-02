@@ -88,7 +88,11 @@ export async function PUT(req: NextRequest) {
 
   const datosActualizar: Record<string, unknown> = {}
   if (active !== undefined) datosActualizar.active = active
-  if (password) datosActualizar.password = await bcrypt.hash(password, 10)
+  if (password) {
+    datosActualizar.password = await bcrypt.hash(password, 10)
+    datosActualizar.intentosFallidos = 0
+    datosActualizar.bloqueadoHasta = null
+  }
   if (nombre) datosActualizar.name = nombre
   if (rut !== undefined) datosActualizar.rut = rut?.trim() || null
   if (email !== undefined) datosActualizar.email = email?.trim() || null
