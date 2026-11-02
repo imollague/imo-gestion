@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/apiAuth"
 import { firmarDocumentoDesatendido } from "@/lib/firmagob"
 import { uploadFile } from "@/lib/storage"
 import { TipoMovimiento } from "@/generated/prisma/client"
+import { descontarStockLotes } from "@/lib/farmaciaLotes"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRole("ADMIN")
@@ -69,6 +70,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const med = await tx.medicamento.findUnique({ where: { id: item.medicamentoId! } })
       if (!med) continue
       const nuevoStock = Math.max(0, med.stockActual - item.cantidad)
+      const baja = med.stockActual - nuevoStock
+      // Sin lote indicado, la baja sale de los lotes como en una merma. Con lote, se retira el lote completo más abajo.
+      if (baja > 0 && !item.lote) await descontarStockLotes(tx, med, baja, { incluirVencidos: true })
 
       await tx.movimientoFarmacia.create({
         data: {
@@ -96,6 +100,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           },
           data: {
             retirado: true,
+            stockActual: 0, // el lote retirado ya no tiene existencias disponibles
             motivoRetiro: `Retiro sanitario #${actaId}: ${acta.causa}`,
             fechaRetiro: ahora,
           },

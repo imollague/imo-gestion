@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireAuth } from "@/lib/apiAuth"
+import { requireRole } from "@/lib/apiAuth"
+import { ROLES_LECTURA_FARMACIA } from "@/lib/farmaciaLotes"
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAuth()
+  const auth = await requireRole(...ROLES_LECTURA_FARMACIA)
   if (!auth.ok) return auth.response
 
   const { id } = await params

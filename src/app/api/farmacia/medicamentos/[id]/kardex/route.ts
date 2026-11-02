@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@/lib/apiAuth"
+import { requireRole } from "@/lib/apiAuth"
+import { ROLES_LECTURA_FARMACIA } from "@/lib/farmaciaLotes"
 import { prisma } from "@/lib/prisma"
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireAuth()
+  const auth = await requireRole(...ROLES_LECTURA_FARMACIA)
   if (!auth.ok) return auth.response
 
   const { id } = await params
@@ -78,11 +79,11 @@ export async function GET(
       lote: m.lote,
       fechaVencimiento: m.fechaVencimiento,
       proveedor: m.proveedor,
-      rutPaciente: m.rutPaciente,
+      rutPaciente: auth.session.user.role === "VIEWER" ? null : m.rutPaciente,
       observacion: m.observacion,
       usuario: m.usuario.name,
       entradas: m.tipo === "ENTRADA" ? m.cantidad : null,
-      salidas: m.tipo === "SALIDA" ? m.cantidad : null,
+      salidas: m.tipo === "SALIDA" || m.tipo === "MERMA" || m.tipo === "RETIRO_SANITARIO" ? m.cantidad : null,
       ajuste: m.tipo === "AJUSTE" ? delta : null,
       saldo,
     }
@@ -101,7 +102,8 @@ function calcularDelta(
   observacion: string | null
 ): number {
   if (tipo === "ENTRADA") return cantidad
-  if (tipo === "SALIDA") return -cantidad
+  // Mermas y retiros sanitarios también bajan el stock
+  if (tipo === "SALIDA" || tipo === "MERMA" || tipo === "RETIRO_SANITARIO") return -cantidad
   if (tipo === "AJUSTE" && observacion) {
     const match = observacion.match(/Stock anterior:\s*(\d+)\s*→\s*Stock real:\s*(\d+)/)
     if (match) {

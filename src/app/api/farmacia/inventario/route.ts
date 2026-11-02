@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireAuth, requireRole } from "@/lib/apiAuth"
+import { requireRole } from "@/lib/apiAuth"
+import { ROLES_LECTURA_FARMACIA } from "@/lib/farmaciaLotes"
 import { firmarDocumentoDesatendido } from "@/lib/firmagob"
 import { uploadFile } from "@/lib/storage"
 
 // GET — actas pendientes de firma del jefe
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth()
+  const auth = await requireRole(...ROLES_LECTURA_FARMACIA)
   if (!auth.ok) return auth.response
 
   const userId = parseInt(auth.session.user.id)

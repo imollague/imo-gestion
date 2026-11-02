@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@/lib/apiAuth"
+import { requireRole } from "@/lib/apiAuth"
+import { ROLES_PACIENTES } from "@/lib/farmaciaLotes"
 import { prisma } from "@/lib/prisma"
 
 // Búsqueda rápida para autocomplete (por RUT o nombre)
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth()
+  const auth = await requireRole(...ROLES_PACIENTES)
   if (!auth.ok) return auth.response
 
   const q = new URL(req.url).searchParams.get("q")?.trim() ?? ""

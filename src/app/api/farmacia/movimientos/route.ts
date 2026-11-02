@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@/lib/apiAuth"
+import { requireRole } from "@/lib/apiAuth"
 import { prisma } from "@/lib/prisma"
 import { TipoMovimiento } from "@/generated/prisma/client"
+import { descontarStockLotes, ROLES_LECTURA_FARMACIA } from "@/lib/farmaciaLotes"
 
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth()
+  const auth = await requireRole(...ROLES_LECTURA_FARMACIA)
   if (!auth.ok) return auth.response
 
   const { searchParams } = new URL(req.url)
@@ -59,7 +60,11 @@ export async function GET(req: NextRequest) {
     }),
   ])
 
-  return NextResponse.json({ movimientos, total, totalVigentes, pagina, limite, totalPaginas: Math.ceil(total / limite) })
+  // El RUT del paciente solo lo ven quienes operan la farmacia
+  const puedeVerPacientes = auth.session.user.role !== "VIEWER"
+  const salida = puedeVerPacientes ? movimientos : movimientos.map((m) => ({ ...m, rutPaciente: null }))
+
+  return NextResponse.json({ movimientos: salida, total, totalVigentes, pagina, limite, totalPaginas: Math.ceil(total / limite) })
 }
 
 export async function POST(req: NextRequest) {
@@ -82,8 +87,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "El motivo del ajuste es obligatorio" }, { status: 400 })
     }
   } else {
-    if (!cantidad || cantidad <= 0) {
-      return NextResponse.json({ error: "La cantidad debe ser mayor a 0" }, { status: 400 })
+    if (!Number.isInteger(cantidad) || cantidad <= 0) {
+      return NextResponse.json({ error: "La cantidad debe ser un número entero mayor a 0" }, { status: 400 })
     }
   }
 
@@ -96,6 +101,11 @@ export async function POST(req: NextRequest) {
       if (tipo === TipoMovimiento.AJUSTE) {
         const diferencia = stockReal - medicamento.stockActual
         if (diferencia === 0) throw new Error("El stock real coincide con el sistema, no es necesario ajustar")
+
+        // Si el ajuste baja el stock, la baja sale también de los lotes (lo "sin lote" primero, luego los que vencen antes)
+        if (diferencia < 0) {
+          await descontarStockLotes(tx, medicamento, -diferencia, { incluirVencidos: true })
+        }
 
         const movimiento = await tx.movimientoFarmacia.create({
           data: {
@@ -115,43 +125,33 @@ export async function POST(req: NextRequest) {
         return movimiento
       }
 
-      // ── SALIDA ───────────────────────────────────────────
+      // ── SALIDA (despacho) ────────────────────────────────
       if (tipo === TipoMovimiento.SALIDA) {
-        if (medicamento.stockActual < cantidad) {
-          throw new Error(`Stock insuficiente. Stock actual: ${medicamento.stockActual}`)
-        }
+        // FEFO: sale primero el lote que vence antes; los lotes vencidos no se despachan
+        const asignaciones = await descontarStockLotes(tx, medicamento, cantidad, { incluirVencidos: false })
 
-        // Descontar del lote más antiguo con stock disponible (FIFO automático)
-        const lotes = await tx.loteFarmacia.findMany({
-          where: { medicamentoId, stockActual: { gt: 0 }, retirado: false },
-          orderBy: { fechaIngreso: "asc" },
-        })
-
-        let restante = cantidad
-        for (const loteItem of lotes) {
-          if (restante <= 0) break
-          const descontar = Math.min(loteItem.stockActual, restante)
-          await tx.loteFarmacia.update({
-            where: { id: loteItem.id },
-            data: { stockActual: { decrement: descontar } },
-          })
-          restante -= descontar
-        }
-
-        const movimiento = await tx.movimientoFarmacia.create({
-          data: {
-            tipo, cantidad, rutPaciente, observacion, medicamentoId,
-            usuarioId: parseInt(session.user.id),
-            ...(pacienteId ? { pacienteId } : {}),
-          },
-        })
-
-        await tx.medicamento.update({
-          where: { id: medicamentoId },
+        // Descuento condicional: si otro despacho simultáneo ya consumió el stock, no deja negativos
+        const descontado = await tx.medicamento.updateMany({
+          where: { id: medicamentoId, stockActual: { gte: cantidad } },
           data: { stockActual: { decrement: cantidad } },
         })
+        if (descontado.count === 0) throw new Error("Stock insuficiente. Intenta nuevamente.")
 
-        return movimiento
+        // Un movimiento por lote usado, para que el kardex y la anulación sepan de qué lote salió cada parte
+        const movimientos = []
+        for (const a of asignaciones) {
+          movimientos.push(await tx.movimientoFarmacia.create({
+            data: {
+              tipo, cantidad: a.cantidad, rutPaciente, observacion, medicamentoId,
+              lote: a.lote?.numeroLote ?? null,
+              fechaVencimiento: a.lote?.fechaVencimiento ?? null,
+              usuarioId: parseInt(session.user.id),
+              ...(pacienteId ? { pacienteId } : {}),
+            },
+          }))
+        }
+
+        return { ...movimientos[0], movimientos }
       }
 
       // ── ENTRADA ──────────────────────────────────────────

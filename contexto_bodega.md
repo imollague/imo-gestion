@@ -120,3 +120,13 @@ enum TipoMovimientoBodega {
 | **Inventario físico** | Alta | Conteo masivo, genera acta con diferencias, ajuste masivo. Necesario para auditorías anuales |
 | **Stock máximo** | Media | Campo `stockMaximo` en schema, alerta de sobrestock |
 | **Cierre de mes** | Baja | Snapshot oficial del inventario al fin de período |
+
+---
+
+## Cambios recientes (revisión de funcionalidad)
+
+- Lecturas del módulo (`/api/bodega/*`) solo para `ADMIN`, `BODEGA` y `VIEWER`; el proxy bloquea `/bodega` a los demás roles.
+- El kardex cuenta mermas y retiros sanitarios como salidas (antes valían 0 y el saldo no cuadraba con el stock).
+- Anulación: solo ENTRADA y SALIDA; ajustes, mermas y retiros se corrigen con un nuevo ajuste. Las verificaciones de stock se hacen dentro de la transacción (sin stock negativo ni doble anulación por clics simultáneos).
+- Las salidas descuentan con una condición atómica (`stockActual >= cantidad`).
+- Pendiente: inventario/merma/retiro llaman a FirmaGob antes de la transacción (si la base falla, queda firmado sin descontar); el stock se recorta a 0 en silencio si el acta supera el stock; ninguna ruta de firma verifica que quien firma sea el `jefeId` del acta; el signo del AJUSTE en el kardex se lee de un texto libre.

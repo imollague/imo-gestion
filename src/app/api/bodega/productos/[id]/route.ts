@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@/lib/apiAuth"
+import { requireRole } from "@/lib/apiAuth"
+import { ROLES_LECTURA_BODEGA } from "@/lib/farmaciaLotes"
 import { prisma } from "@/lib/prisma"
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireAuth()
+  const auth = await requireRole(...ROLES_LECTURA_BODEGA)
   if (!auth.ok) return auth.response
 
   const { id } = await params

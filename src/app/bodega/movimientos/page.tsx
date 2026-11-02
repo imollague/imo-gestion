@@ -304,7 +304,7 @@ export default function HistorialMovimientosBodegaPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        {!m.anulado && !m.anulacionDeId ? (
+                        {!m.anulado && !m.anulacionDeId && (m.tipo === "ENTRADA" || m.tipo === "SALIDA") ? (
                           <button
                             onClick={() => setMovimientoAAnular({
                               id: m.id,

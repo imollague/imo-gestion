@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/apiAuth"
 import { firmarDocumentoDesatendido } from "@/lib/firmagob"
 import { uploadFile } from "@/lib/storage"
 import { TipoMovimiento } from "@/generated/prisma/client"
+import { descontarStockLotes } from "@/lib/farmaciaLotes"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireRole("ADMIN")
@@ -69,6 +70,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     })
 
     for (const item of itemsConDif) {
+      // Si el conteo es menor que el stock actual, la baja también sale de los lotes
+      const med = await tx.medicamento.findUnique({ where: { id: item.medicamentoId! } })
+      if (!med) continue
+      const baja = med.stockActual - item.stockContado
+      if (baja > 0) await descontarStockLotes(tx, med, baja, { incluirVencidos: true })
+
       await tx.movimientoFarmacia.create({
         data: {
           tipo: TipoMovimiento.AJUSTE,

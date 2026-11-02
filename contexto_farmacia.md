@@ -1,157 +1,110 @@
 # Módulo Farmacia Posta Rural
-> **Estado:** Producción  
-> **Rol requerido:** `FARMACIA` o `ADMIN`
+> **Estado:** En desarrollo (rama `modulo/bodega-farmacia`). Se prepara su puesta en marcha con datos reales.
+> **Roles:** `FARMACIA` opera; `ADMIN` opera y firma como jefe; `VIEWER` solo lectura (sin datos de pacientes).
 
-Gestión de inventario de medicamentos con control de lotes, vencimientos y despacho a pacientes.
-
----
-
-## Modelos Prisma
-
-```prisma
-model CategoriaFarmacia {
-  id           Int           @id @default(autoincrement())
-  nombre       String        @unique
-  medicamentos Medicamento[]
-}
-
-model Medicamento {
-  id           Int                    @id @default(autoincrement())
-  codigo       String                 @unique
-  nombre       String
-  descripcion  String?
-  unidad       String
-  stock        Int                    @default(0)
-  stockMinimo  Int                    @default(0)
-  categoriaId  Int
-  activo       Boolean                @default(true)
-  validoDesde  DateTime               @default(now())
-  validoHasta  DateTime?
-  createdAt    DateTime               @default(now())
-  categoria    CategoriaFarmacia      @relation(...)
-  movimientos  MovimientoFarmacia[]
-  lotes        LoteFarmacia[]
-  historial    MedicamentoHistorial[]
-}
-
-model MedicamentoHistorial {
-  // SCD: snapshot del medicamento al momento de cada cambio
-  id            Int      @id @default(autoincrement())
-  medicamentoId Int
-  campo         String
-  valorAntes    String
-  valorDespues  String
-  cambiadoPor   Int      // FK User
-  createdAt     DateTime @default(now())
-}
-
-model LoteFarmacia {
-  id            Int      @id @default(autoincrement())
-  medicamentoId Int
-  numeroLote    String
-  fechaVenc     DateTime
-  fechaIngreso  DateTime @default(now())
-  stockInicial  Int
-  stockActual   Int
-  retirado      Boolean  @default(false)
-  motivoRetiro  String?
-  createdAt     DateTime @default(now())
-}
-
-model MovimientoFarmacia {
-  id            Int      @id @default(autoincrement())
-  medicamentoId Int
-  tipo          TipoMovimientoFarmacia  // ENTRADA | SALIDA | AJUSTE | RETIRO
-  cantidad      Int
-  loteId        Int?     // Lote afectado (en SALIDA: lote FIFO descontado)
-  pacienteId    Int?     // FK Paciente (solo en SALIDA/despacho)
-  observacion   String?
-  anulado       Boolean  @default(false)
-  anulacionDeId Int?
-  usuarioId     Int      // FK User
-  createdAt     DateTime @default(now())
-}
-
-model Paciente {
-  id          Int      @id @default(autoincrement())
-  rut         String   @unique
-  nombres     String
-  apellidos   String
-  telefono    String?
-  activo      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  despachos   MovimientoFarmacia[]
-}
-
-enum TipoMovimientoFarmacia {
-  ENTRADA
-  SALIDA
-  AJUSTE
-  RETIRO
-}
-```
+Inventario de medicamentos con lotes y vencimientos, despacho a pacientes, y actas firmadas con FirmaGob (inventario, merma, retiro sanitario).
 
 ---
 
-## Rutas
+## Modelos (resumen, ver `prisma/schema.prisma`)
 
-### API (`/api/farmacia/`)
-| Ruta | Métodos | Descripción |
-|------|---------|-------------|
-| `/api/farmacia/categorias` | GET, POST | CRUD categorías |
-| `/api/farmacia/medicamentos` | GET, POST | Lista + crear medicamento |
-| `/api/farmacia/medicamentos/[id]` | GET, PUT, DELETE | Detalle + editar + desactivar |
-| `/api/farmacia/medicamentos/[id]/kardex` | GET | Kardex del medicamento |
-| `/api/farmacia/medicamentos/buscar` | GET | Autocomplete por código o nombre |
-| `/api/farmacia/lotes` | GET, POST | Lista lotes + crear lote |
-| `/api/farmacia/lotes/[id]` | PUT | Retirar lote (alerta sanitaria) |
-| `/api/farmacia/movimientos` | GET, POST | Lista con filtros + crear movimiento |
-| `/api/farmacia/movimientos/[id]` | GET, PUT | Detalle + anular |
-| `/api/farmacia/pacientes` | GET, POST | Lista + crear paciente |
-| `/api/farmacia/pacientes/[id]` | GET, PUT | Detalle + editar |
-| `/api/farmacia/pacientes/buscar` | GET | Autocomplete por RUT o nombre |
-| `/api/reportes/farmacia` | GET | Exportar Excel/PDF |
+- `Medicamento`: `codigo` único, `nombreGenerico`, `nombreComercial?`, `formaFarmaceutica`, `concentracion?`, `unidad`, `stockActual`, `stockMinimo`, `categoriaId`, `activo`. Historial SCD en `MedicamentoHistorial`.
+- `LoteFarmacia`: `numeroLote`, `fechaVencimiento?`, `stockInicial`, `stockActual`, `fechaIngreso`, `proveedor?`, `retirado`, `motivoRetiro?`, `fechaRetiro?`.
+- `MovimientoFarmacia`: `tipo` (`TipoMovimiento` compartido con Bodega: ENTRADA, SALIDA, AJUSTE, MERMA, RETIRO_SANITARIO), `cantidad`, `lote?` (número de lote como texto), `fechaVencimiento?`, `proveedor?`, `rutPaciente?`, `pacienteId?`, `observacion?`, `anulado`, `motivoAnulacion?`, `anulacionDeId?`.
+- `Paciente`: `rut` único, `nombre`, `apellido`, `telefono?`, `activo`.
+- Actas (compartidas con Bodega, campo `modulo = "FARMACIA"`): `ActaInventario`, `ActaMerma`, `ActaRetiroSanitario` + sus ítems. Los ítems referencian `medicamentoId` sin FK.
 
-### Páginas (`/farmacia/`)
-| Ruta | Descripción |
-|------|-------------|
-| `/farmacia/medicamentos` | Lista con filtros, stock crítico y lotes vencidos destacados |
-| `/farmacia/medicamentos/nuevo` | Formulario alta de medicamento |
-| `/farmacia/medicamentos/[id]` | Detalle + Lotes activos + tabs Movimientos / Kardex |
-| `/farmacia/movimientos` | Lista con filtros y acción de anulación |
-| `/farmacia/movimientos/nuevo` | Formulario de movimiento (BuscadorCodigo + BuscadorPaciente) |
-| `/farmacia/pacientes` | Registro y búsqueda de pacientes con historial de despachos |
-| `/farmacia/categorias` | CRUD de categorías |
+> Los ítems de acta de merma e inventario **no tienen campo de lote**. La baja se reparte entre lotes de forma automática (ver "Lotes").
 
 ---
 
-## Funcionalidades implementadas
+## Lotes: cómo se mueve el stock
 
-- CRUD medicamentos con historial SCD
-- **Control de lotes FIFO:** las salidas descuentan del lote con `fechaIngreso` más antigua que tenga stock disponible
-- **Retiro de lotes** (alerta sanitaria o vencimiento): genera movimiento tipo RETIRO automáticamente
-- Alertas de lotes vencidos en la ficha del medicamento
-- Movimientos vinculados a **Paciente** (autocomplete + creación inline desde el formulario)
-- **Kardex** por medicamento: saldo acumulado con detalle de lote y paciente por línea
-- **Registro de pacientes**: RUT validado con dígito verificador, historial completo de despachos
-- Exportar inventario a **Excel y PDF**
-- Alertas de stock bajo y lotes por vencer (badge en nav)
+El stock del medicamento (`Medicamento.stockActual`) y el de cada lote se mueven juntos. La parte del stock que no pertenece a ningún lote (entradas antiguas sin lote) se calcula como `stockActual − suma de lotes vigentes` y se llama "sin lote".
+
+Implementado en `src/lib/farmaciaLotes.ts` (`descontarStockLotes`):
+
+| Operación | De dónde descuenta |
+|-----------|--------------------|
+| **Despacho (SALIDA)** | FEFO: primero el lote que vence antes. **Nunca toca lotes vencidos** (vencen al terminar el día de su fecha). Lo "sin lote" va al final. Se crea **un movimiento por lote usado**, con `lote` y `fechaVencimiento`. |
+| Ajuste a la baja, merma, inventario con diferencia negativa, retiro sanitario sin lote | Primero lo "sin lote", luego los lotes por vencimiento (los vencidos salen primero). |
+| Retiro sanitario con lote indicado | El lote queda `retirado` y con `stockActual = 0`. |
+| Ajuste/inventario al alza | No toca lotes: el aumento queda como "sin lote". |
+| ENTRADA | Crea el lote, o suma al existente con el mismo número (sin importar mayúsculas: no se normaliza). |
+
+Si el stock despachable (sin vencidos) no alcanza, el despacho falla indicando cuánto hay sin vencer y cuánto en lotes vencidos.
+
+## Anulación de movimientos
+
+- Solo se anulan **ENTRADA y SALIDA**. Ajustes, mermas y retiros sanitarios se corrigen con un nuevo ajuste.
+- No se puede anular una anulación.
+- Anular una SALIDA devuelve el stock **al lote del que salió** (falla si ese lote fue retirado). Las salidas antiguas sin lote solo devuelven al stock total.
+- Anular una ENTRADA exige que su lote siga disponible y con al menos esa cantidad (si ya se despachó parte, no se puede).
+- El descuento y la marca de anulado son condicionales dentro de la transacción (sin stock negativo ni doble anulación por clics simultáneos).
+
+## Kardex
+
+`/api/farmacia/medicamentos/[id]/kardex`: el saldo cuenta ENTRADA (+), SALIDA, MERMA y RETIRO_SANITARIO (−) y AJUSTE (signo leído del texto `Stock anterior: X → Stock real: Y` de la observación). Mermas y retiros aparecen en la columna "salidas".
 
 ---
 
-## Decisiones técnicas específicas
+## Permisos
 
-- **FIFO automático:** al crear una SALIDA, el sistema selecciona automáticamente el lote más antiguo con stock suficiente. Si el stock está distribuido en varios lotes, descuenta en orden hasta cubrir la cantidad total.
-- **Retiro de lote:** cambia `retirado=true` en el lote y genera un `MovimientoFarmacia` tipo RETIRO con la cantidad que quedaba. El stock del medicamento se reduce.
-- **Anulación con lotes:** al anular una SALIDA, el stock se devuelve al lote original referenciado por `loteId`.
-- **Paciente inline:** `BuscadorPaciente.tsx` permite crear el paciente sin salir del formulario de movimiento si no existe en el sistema.
+- Lecturas de farmacia (medicamentos, lotes, categorías, movimientos, kardex, actas pendientes): `ADMIN`, `FARMACIA`, `VIEWER`.
+- Pacientes (`/api/farmacia/pacientes*`): solo `ADMIN` y `FARMACIA`. En movimientos, kardex y ficha del medicamento el `rutPaciente` se oculta para `VIEWER`.
+- Páginas (`src/proxy.ts`): `/farmacia` solo ADMIN/FARMACIA/VIEWER, `/farmacia/pacientes` sin VIEWER. `/bodega` análogo con BODEGA.
+- Escrituras: `ADMIN` y `FARMACIA`. Firma de actas como jefe: solo `ADMIN`.
+
+## Rutas API (`/api/farmacia/`)
+
+`categorias`, `medicamentos` (+ `[id]`, `[id]/kardex`, `[id]/lotes`, `buscar`), `lotes` (GET) y `lotes/[id]/retirar`, `movimientos` (+ `[id]/anular`), `pacientes` (+ `buscar`), `inventario` (+ `[id]/jefe`), `merma` (+ `[id]/jefe`), `retiro-sanitario` (+ `[id]/jefe`), `acta-inventario` (obsoleta). Reportes: `/api/reportes/farmacia`.
+
+## Páginas (`/farmacia/`)
+
+Inicio (inventario + paneles de actas pendientes del jefe), `medicamentos/nuevo`, `medicamentos/[id]` (ficha, lotes, movimientos, kardex), `movimientos`, `movimientos/nuevo`, `pacientes`, `categorias`, `inventario/nuevo`, `merma/nueva`, `retiro-sanitario/nueva`.
 
 ---
 
 ## Pendientes
 
-| Feature | Prioridad | Descripción |
-|---------|-----------|-------------|
-| **Recetas/prescripciones** | Baja | Número de receta al despachar. Depende de si hay médicos asociados a la posta |
-| **Cierre de mes farmacia** | Baja | Snapshot oficial del inventario al fin de período |
-| **Dashboard por rol** | Media | Farmacéutico ve solo métricas de farmacia, sin bodega |
+Origen: revisión de funcionalidad y UX. ✅ = hecho, ⏳ = pendiente.
+
+### Seguridad y consistencia de datos
+- ✅ Datos de pacientes y listados exigen rol; proxy bloquea módulos ajenos.
+- ✅ Despacho FEFO sin lotes vencidos, registrando el lote usado.
+- ✅ Merma, ajuste, inventario, retiro y anulación mueven también el stock del lote.
+- ✅ Kardex cuenta mermas y retiros sanitarios (Bodega y Farmacia).
+- ✅ Anulación: solo ENTRADA/SALIDA, no anular anulaciones, verificaciones dentro de la transacción.
+- ⏳ **Dos formas de retirar un lote con distinto control:** el botón "Retirar lote" (`lotes/[id]/retirar`) lo hace FARMACIA solo con un motivo, sin acta ni firma del jefe; el acta de retiro sanitario sí exige firma. Decidir si el botón debe llevar al acta.
+- ⏳ **Elegir el lote en merma e inventario.** Hoy el reparto es automático (ver tabla de Lotes). Para elegirlo hay que agregar `lote` a `ActaMermaItem` y `ActaInventarioItem` (migración) y tocar los formularios.
+- ⏳ Las rutas de firma del jefe llaman a FirmaGob **antes** de la transacción: si la base falla, el documento queda firmado y el stock sin descontar. También un doble clic podría firmar dos veces (la UI deshabilita el botón, la API no). Conviene reservar el acta (`PENDIENTE_JEFE` → en proceso) antes de firmar.
+- ⏳ El stock se recorta a 0 en silencio (`Math.max(0, …)`) al aplicar merma/retiro si el stock actual es menor al del acta.
+- ⏳ Ninguna ruta de firma comprueba que quien firma sea el `jefeId` elegido en el acta (cualquier ADMIN firma cualquier acta).
+- ⏳ El saldo del kardex lee el signo del AJUSTE desde un texto libre (regex). Guardar el delta firmado en el movimiento.
+- ⏳ Retiro sanitario con lote: si el lote tenía más stock que la cantidad del acta, esa diferencia queda "sin lote" en el total.
+
+### Funcionalidad para operar farmacia
+- ⏳ **Despacho con paciente obligatorio**, y con número de receta y prescriptor (hoy el paciente es opcional). Prioridad subida a Media/Alta.
+- ⏳ **Psicotrópicos / estupefacientes:** libro de control y receta retenida. **Por consultar** si la posta maneja alguno antes de implementar.
+- ⏳ Mostrar vencimiento y lote de salida en el formulario de despacho, y alertas de lotes por vencer en la lista principal.
+- ⏳ ENTRADA con lote y vencimiento obligatorios, y lista de lotes existentes en vez de texto libre (evita lotes duplicados por error de tipeo).
+- ⏳ Reportes: consumo mensual por medicamento / paciente / prescriptor, y cierre de mes (snapshot oficial).
+- ⏳ Unidades: conversión caja ↔ comprimido si se recibe y despacha en unidades distintas.
+- ⏳ Dashboard por rol (farmacia ve solo farmacia).
+
+### UI/UX
+- ⏳ Pantalla principal: 9 botones al mismo nivel; reducir a acciones frecuentes (despacho, entrada) y agrupar las demás.
+- ⏳ Alerta de stock bajo lista todo sin tope; tablas no pensadas para móvil; enlaces `<a href>` en vez de `Link`.
+- ⏳ Los tres paneles de actas pendientes son copias de un mismo componente.
+- ⏳ Formulario de movimiento: éxito de 2 s y limpieza automática; confirmación con colores inconsistentes.
+- ⏳ Faltan tildes en textos de farmacia ("Codigo", "Categorias", "Observacion").
+- ⏳ Los botones "Anular" se muestran también a VIEWER (la API los rechaza, pero conviene ocultarlos).
+
+---
+
+## Decisiones técnicas
+
+- **Un movimiento por lote** en los despachos que cruzan lotes: el kardex y la anulación saben de qué lote salió cada parte sin cambiar el esquema.
+- **Sin migraciones** en los cambios de lotes/kardex/permisos: todo se resolvió con lógica.
+- **Paciente inline:** `BuscadorPaciente.tsx` permite crear el paciente desde el formulario de movimiento.
+- Estas decisiones y pendientes aplican igual a Bodega, salvo lo relativo a lotes y pacientes (Bodega no tiene lotes).

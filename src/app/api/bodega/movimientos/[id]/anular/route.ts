@@ -36,18 +36,21 @@ export async function POST(
     return NextResponse.json({ error: "Este movimiento ya tiene una anulacion asociada" }, { status: 400 })
   }
 
-  if (movimiento.tipo === "ENTRADA" && movimiento.producto.stockActual < movimiento.cantidad) {
+  // Ajustes, mermas y retiros sanitarios nacen de un acta o de un conteo: se corrigen con un nuevo ajuste, no revirtiéndolos
+  if (movimiento.tipo !== "ENTRADA" && movimiento.tipo !== "SALIDA") {
     return NextResponse.json({
-      error: `No se puede anular. Stock actual (${movimiento.producto.stockActual}) es menor a la cantidad a descontar (${movimiento.cantidad})`
+      error: "Solo se pueden anular entradas y salidas. Para corregir un ajuste, merma o retiro registra un ajuste de stock.",
     }, { status: 400 })
   }
 
   try {
     const resultado = await prisma.$transaction(async (tx) => {
-      await tx.movimientoBodega.update({
-        where: { id: movimientoId },
+      // Marca como anulado solo si sigue vigente: evita anular dos veces con clics simultáneos
+      const marcado = await tx.movimientoBodega.updateMany({
+        where: { id: movimientoId, anulado: false },
         data: { anulado: true, motivoAnulacion: motivo.trim() },
       })
+      if (marcado.count === 0) throw new Error("Este movimiento ya fue anulado")
 
       const tipoInverso = movimiento.tipo === "ENTRADA" ? "SALIDA" : "ENTRADA"
       const movimientoAnulacion = await tx.movimientoBodega.create({
@@ -63,11 +66,21 @@ export async function POST(
         },
       })
 
-      const delta = movimiento.tipo === "ENTRADA" ? -movimiento.cantidad : movimiento.cantidad
-      await tx.productoBodega.update({
-        where: { id: movimiento.productoId },
-        data: { stockActual: { increment: delta } },
-      })
+      if (movimiento.tipo === "ENTRADA") {
+        // Descuento condicional dentro de la transacción: el stock actual debe cubrir lo que se revierte
+        const descontado = await tx.productoBodega.updateMany({
+          where: { id: movimiento.productoId, stockActual: { gte: movimiento.cantidad } },
+          data: { stockActual: { decrement: movimiento.cantidad } },
+        })
+        if (descontado.count === 0) {
+          throw new Error("No se puede anular: el stock actual es menor a la cantidad a descontar.")
+        }
+      } else {
+        await tx.productoBodega.update({
+          where: { id: movimiento.productoId },
+          data: { stockActual: { increment: movimiento.cantidad } },
+        })
+      }
 
       return movimientoAnulacion
     })

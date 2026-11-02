@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@/lib/apiAuth"
+import { requireRole } from "@/lib/apiAuth"
+import { ROLES_LECTURA_FARMACIA } from "@/lib/farmaciaLotes"
 import { prisma } from "@/lib/prisma"
 
 // GET - Obtener medicamento por ID con sus movimientos e historial
@@ -7,7 +8,7 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await requireAuth()
+  const auth = await requireRole(...ROLES_LECTURA_FARMACIA)
   if (!auth.ok) return auth.response
 
   const { id: idStr } = await params
@@ -43,6 +44,14 @@ export async function GET(
   })
 
   if (!medicamento) return NextResponse.json({ error: "Medicamento no encontrado" }, { status: 404 })
+
+  // El RUT del paciente solo lo ven quienes operan la farmacia
+  if (auth.session.user.role === "VIEWER") {
+    return NextResponse.json({
+      ...medicamento,
+      movimientos: medicamento.movimientos.map((m) => ({ ...m, rutPaciente: null })),
+    })
+  }
 
   return NextResponse.json(medicamento)
 }

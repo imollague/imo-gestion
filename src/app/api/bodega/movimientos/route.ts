@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAuth, requireRole } from "@/lib/apiAuth"
+import { requireRole } from "@/lib/apiAuth"
+import { ROLES_LECTURA_BODEGA } from "@/lib/farmaciaLotes"
 import { prisma } from "@/lib/prisma"
 import { TipoMovimiento, TipoDocumento } from "@/generated/prisma/client"
 
 /* GET */
 export async function GET(req: NextRequest) {
-  const auth = await requireAuth()
+  const auth = await requireRole(...ROLES_LECTURA_BODEGA)
   if (!auth.ok) return auth.response
 
   const { searchParams } = new URL(req.url)
@@ -91,8 +92,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "El motivo del ajuste es obligatorio" }, { status: 400 })
     }
   } else {
-    if (!cantidad || cantidad <= 0) {
-      return NextResponse.json({ error: "La cantidad debe ser mayor a 0" }, { status: 400 })
+    if (!Number.isInteger(cantidad) || cantidad <= 0) {
+      return NextResponse.json({ error: "La cantidad debe ser un número entero mayor a 0" }, { status: 400 })
     }
     if (!documento) {
       return NextResponse.json({ error: "El tipo de documento es requerido" }, { status: 400 })
@@ -152,14 +153,19 @@ export async function POST(req: NextRequest) {
         },
       })
 
-      await tx.productoBodega.update({
-        where: { id: productoId },
-        data: {
-          stockActual: tipo === TipoMovimiento.ENTRADA
-            ? { increment: cantidad }
-            : { decrement: cantidad },
-        },
-      })
+      if (tipo === TipoMovimiento.ENTRADA) {
+        await tx.productoBodega.update({
+          where: { id: productoId },
+          data: { stockActual: { increment: cantidad } },
+        })
+      } else {
+        // Descuento condicional: si otra salida simultánea ya consumió el stock, no deja negativos
+        const descontado = await tx.productoBodega.updateMany({
+          where: { id: productoId, stockActual: { gte: cantidad } },
+          data: { stockActual: { decrement: cantidad } },
+        })
+        if (descontado.count === 0) throw new Error("Stock insuficiente. Intenta nuevamente.")
+      }
 
       return movimiento
     })

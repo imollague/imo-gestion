@@ -6,13 +6,16 @@ export default withAuth(
     const token = req.nextauth.token
     const pathname = req.nextUrl.pathname
 
-    // Si es BODEGA intentando acceder a farmacia, bloquear
-    if (token?.role === "BODEGA" && pathname.startsWith("/farmacia")) {
+    // Cada módulo solo admite a su rol, a ADMIN y a VIEWER (solo lectura)
+    const role = token?.role as string | undefined
+    if (pathname.startsWith("/farmacia") && !(role === "ADMIN" || role === "FARMACIA" || role === "VIEWER")) {
       return NextResponse.redirect(new URL("/dashboard", req.url))
     }
-
-    // Si es FARMACIA intentando acceder a bodega, bloquear
-    if (token?.role === "FARMACIA" && pathname.startsWith("/bodega")) {
+    if (pathname.startsWith("/bodega") && !(role === "ADMIN" || role === "BODEGA" || role === "VIEWER")) {
+      return NextResponse.redirect(new URL("/dashboard", req.url))
+    }
+    // Los datos de pacientes (RUT, teléfono) no son para VIEWER
+    if (pathname.startsWith("/farmacia/pacientes") && role === "VIEWER") {
       return NextResponse.redirect(new URL("/dashboard", req.url))
     }
 
