@@ -33,8 +33,13 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   })
 
   if (!vehiculo) return NextResponse.json({ error: "No encontrado" }, { status: 404 })
+  const enUso = (await prisma.solicitudVehiculo.count({
+    where: { vehiculoId: vehiculo.id, estado: "EN_CURSO" },
+  })) > 0
+
   return NextResponse.json({
     ...vehiculo,
+    enUso,
     imagenUrl: toProxyUrl(vehiculo.imagenUrl),
     documentos: vehiculo.documentos.map((d) => ({ ...d, url: toProxyUrl(d.url)! })),
   })

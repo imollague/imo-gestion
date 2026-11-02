@@ -131,6 +131,20 @@ export default function NuevaSolicitudPage() {
     return v.licenciasPermitidas.length === 0 || v.licenciasPermitidas.includes(conductor.tipoLicencia)
   })
 
+  // Vehículo preseleccionado desde la ficha del vehículo (?vehiculoId=)
+  const [vehiculoPre] = useState(() =>
+    typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("vehiculoId") ?? ""
+  )
+  useEffect(() => {
+    if (vehiculoPre && !form.vehiculoId && vehiculosDisponibles.some((v) => String(v.id) === vehiculoPre)) {
+      set("vehiculoId", vehiculoPre)
+    }
+  }, [vehiculoPre, vehiculosDisponibles, form.vehiculoId])
+
+  const preNoDisponible = vehiculoPre !== "" && vehiculos.length > 0 &&
+    !vehiculosDisponibles.some((v) => String(v.id) === vehiculoPre)
+  const vehiculoPreInfo = vehiculos.find((v) => String(v.id) === vehiculoPre)
+
   const handleSubmit = async () => {
     setError("")
     if (!form.vehiculoId || !form.conductorNombre || !form.destino || !form.proposito || !form.horaSalidaEst) {
@@ -200,6 +214,12 @@ export default function NuevaSolicitudPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Vehículo disponible *</label>
+            {preNoDisponible && !form.vehiculoId && (
+              <p className="text-xs text-amber-600 mb-2">
+                {vehiculoPreInfo ? `${vehiculoPreInfo.patente} no está disponible` : "El vehículo elegido no está disponible"}
+                {" "}(en uso, fuera de servicio o licencia no compatible). Elige otro.
+              </p>
+            )}
             {vehiculosDisponibles.length === 0 ? (
               <p className="text-sm text-gray-400 py-3">
                 No hay vehículos disponibles{conductor ? ` para licencia ${conductor.tipoLicencia}` : ""} en este momento.

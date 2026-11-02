@@ -13,6 +13,7 @@ interface Vehiculo {
   anio: number
   tipo: string
   estado: string
+  enUso: boolean
   kmActual: number
   vencimientos: { id: number; fechaVencimiento: string; diasAlerta: number | null; tipoDocumento: { nombre: string; diasAlertaDefault: number } }[]
   observaciones: string | null
@@ -352,6 +353,24 @@ export default function VehiculoDetallePage() {
             {vehiculo.observaciones && (
               <p className="text-sm text-gray-500 italic">{vehiculo.observaciones}</p>
             )}
+            {(() => {
+              const motivo = vehiculo.estado !== "OPERATIVO"
+                ? `No disponible: ${vehiculo.estado.replace(/_/g, " ").toLowerCase()}`
+                : vehiculo.enUso ? "No disponible: ya está en uso" : null
+              return (
+                <div className="mt-4">
+                  <button
+                    onClick={() => router.push(`/flota/solicitudes/nueva?vehiculoId=${vehiculo.id}`)}
+                    disabled={!!motivo}
+                    title={motivo ?? undefined}
+                    className="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Crear solicitud
+                  </button>
+                  {motivo && <p className="text-xs text-gray-400 mt-1 text-center">{motivo}</p>}
+                </div>
+              )
+            })()}
             {(role === "ADMIN" || role === "ENCARGADO") && (
               <a
                 href={`/flota/vehiculos/${vehiculo.id}/editar`}
