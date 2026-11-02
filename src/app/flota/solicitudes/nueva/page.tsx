@@ -131,6 +131,23 @@ export default function NuevaSolicitudPage() {
     return v.licenciasPermitidas.length === 0 || v.licenciasPermitidas.includes(conductor.tipoLicencia)
   })
 
+  // Una línea por día en el propósito: "DD-MM-AAAA texto". Parte desde la fecha de salida, o la siguiente a la última línea.
+  const agregarLineaConFecha = () => {
+    const re = /^(\d{2})-(\d{2})-(\d{4})\b/
+    const lineas = form.proposito.split("\n")
+    const ultima = [...lineas].reverse().find((l) => re.test(l.trim()))?.trim().match(re)
+    let base: Date
+    if (ultima) {
+      base = new Date(Number(ultima[3]), Number(ultima[2]) - 1, Number(ultima[1]) + 1)
+    } else {
+      base = form.horaSalidaEst ? new Date(form.horaSalidaEst) : new Date()
+    }
+    const pad = (n: number) => String(n).padStart(2, "0")
+    const fecha = `${pad(base.getDate())}-${pad(base.getMonth() + 1)}-${base.getFullYear()} `
+    const actual = form.proposito.replace(/\s+$/, "")
+    set("proposito", actual ? `${actual}\n${fecha}` : fecha)
+  }
+
   // Vehículo preseleccionado desde la ficha del vehículo (?vehiculoId=)
   const [vehiculoPre] = useState(() =>
     typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("vehiculoId") ?? ""
@@ -255,10 +272,15 @@ export default function NuevaSolicitudPage() {
             <textarea
               value={form.proposito}
               onChange={(e) => set("proposito", e.target.value)}
-              rows={3}
-              placeholder="Ej: Retiro de insumos para bodega municipal"
+              rows={4}
+              placeholder={"Ej: Retiro de insumos para bodega municipal\nO por día:\n02-11-2026 viaje Ollagüe-Calama\n03-11-2026 carga de paquetes Chilexpress"}
               className="w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
             />
+            <button
+              type="button"
+              onClick={agregarLineaConFecha}
+              className="text-xs text-blue-600 hover:underline mt-1"
+            >+ Agregar línea con fecha (DD-MM-AAAA)</button>
           </div>
 
           <div className="border-t pt-4">

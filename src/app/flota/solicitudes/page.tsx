@@ -155,7 +155,7 @@ export default function SolicitudesPage() {
                     </span>
                   </div>
                   <p className="text-gray-700 font-medium">{s.destino}</p>
-                  <p className="text-gray-500 text-sm">{s.proposito}</p>
+                  <p className="text-gray-500 text-sm whitespace-pre-line">{s.proposito}</p>
                   {verTodas && (
                     <p className="text-gray-400 text-xs mt-1">Conductor: {s.conductorNombre}</p>
                   )}

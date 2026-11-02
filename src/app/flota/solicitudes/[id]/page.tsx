@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { useSession } from "next-auth/react"
 import Layout from "@/components/Layout"
-import { crearPDFMembretado } from "@/lib/pdfMembrete"
+import { crearPDFMembretado, agregarPaginaMembretada } from "@/lib/pdfMembrete"
 import { agregarHojaFirmas } from "@/lib/pdfFirmas"
 import { comprimirImagen } from "@/lib/comprimirImagen"
 import { formatearRut } from "@/lib/validarRut"
@@ -74,8 +74,9 @@ function fmtFecha(iso: string) {
 }
 
 async function buildDocPDF(s: Solicitud, firmante?: { nombre: string; rut: string }) {
-  const { doc, margenX, anchoUtil, yContenido } = await crearPDFMembretado()
+  const { doc, margenX, anchoUtil, yContenido, yPiePagina: yPieInicial } = await crearPDFMembretado()
   let y = yContenido
+  let yPiePagina = yPieInicial
 
   doc.setFontSize(16)
   doc.setTextColor(0)
@@ -98,12 +99,38 @@ async function buildDocPDF(s: Solicitud, firmante?: { nombre: string; rut: strin
 
   doc.setFont("helvetica", "normal")
   doc.setFontSize(11)
+  const altoLinea = 5.5   // mm entre líneas de un mismo campo
+  const espacioCampo = 4  // mm de aire entre un campo y el siguiente
+  const xValor = margenX + 40
   for (const [label, valor] of campos) {
+    // El propósito puede traer varias líneas ("DD-MM-AAAA texto"); cada una se ajusta al ancho disponible
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(11)
+    const lineas: string[] = valor.split("\n").flatMap((l) => doc.splitTextToSize(l || " ", anchoUtil - 40))
+
+    // Si el campo no cabe entero antes del pie, pasa a una página nueva
+    // (salvo que sea más largo que una página: entonces se corta línea a línea más abajo)
+    const altoCampo = lineas.length * altoLinea
+    const altoPagina = yPiePagina - yContenido
+    if (y + altoCampo > yPiePagina && altoCampo <= altoPagina) {
+      ;({ yContenido: y, yPiePagina } = await agregarPaginaMembretada(doc, margenX))
+      doc.setTextColor(0)
+    }
+
     doc.setFont("helvetica", "bold")
     doc.text(`${label}:`, margenX, y)
     doc.setFont("helvetica", "normal")
-    doc.text(valor, margenX + 55, y)
-    y += 8
+    for (const linea of lineas) {
+      if (y > yPiePagina) {
+        ;({ yContenido: y, yPiePagina } = await agregarPaginaMembretada(doc, margenX))
+        doc.setTextColor(0)
+        doc.setFont("helvetica", "normal")
+        doc.setFontSize(11)
+      }
+      doc.text(linea, xValor, y)
+      y += altoLinea
+    }
+    y += espacioCampo
   }
 
   if (firmante) {
@@ -945,7 +972,7 @@ export default function SolicitudDetallePage() {
               </div>
               <div>
                 <span className="text-gray-500">Propósito</span>
-                <p className="text-gray-700 mt-1">{solicitud.proposito}</p>
+                <p className="text-gray-700 mt-1 whitespace-pre-line">{solicitud.proposito}</p>
               </div>
               <div className="flex justify-between pt-1 border-t">
                 <span className="text-gray-500">Solicitado</span>
