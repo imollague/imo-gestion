@@ -8,6 +8,7 @@ import { crearPDFMembretado, agregarPaginaMembretada } from "@/lib/pdfMembrete"
 import { agregarHojaFirmas } from "@/lib/pdfFirmas"
 import { comprimirImagen } from "@/lib/comprimirImagen"
 import { formatearRut } from "@/lib/validarRut"
+import BitacoraViajeCard from "@/components/BitacoraViajeCard"
 
 interface ChecklistItem { id: number; categoria: string; descripcion: string; orden: number }
 interface ChecklistRespuesta { itemId: number; valor: string; observacion: string }
@@ -46,7 +47,7 @@ interface Solicitud {
   checklist: { id: number; respuestas: { item: ChecklistItem; valor: string; observacion: string | null }[] } | null
   ordenServicio: { id: number; folio: string | null; horaSalidaEst: string; horaRetornoEst: string | null; firmada: boolean; firmadaPor: { name: string } | null; fechaFirma: string | null } | null
   documentoFirmadoOS: { urlFirmado: string | null; urlOriginal: string | null; estado: string; firmadoEn: string | null } | null
-  bitacora: { id: number; kmSalida: number; kmLlegada: number | null; horaRetornoReal: string | null; observacion: string | null; paradas: ParadaViaje[] } | null
+  bitacora: { id: number; registradoEn: string; kmSalida: number; kmLlegada: number | null; horaRetornoReal: string | null; observacion: string | null; paradas: ParadaViaje[] } | null
   hojaVida: { id: number; tipo: string; descripcion: string; fecha: string; usuario: { name: string } }[]
   fotosRevision: FotoRevision[]
   observacionesSolicitud: ObservacionSolicitud[]
@@ -1180,6 +1181,29 @@ export default function SolicitudDetallePage() {
           </div>
         </div>
       </div>
+
+      {/* Bitácora del viaje: salida, paradas y llegada (visible apenas se registra la salida) */}
+      {solicitud.bitacora && (
+        <BitacoraViajeCard
+          datos={{
+            solicitudId: solicitud.id,
+            folio: solicitud.ordenServicio?.folio ?? null,
+            estado: solicitud.estado,
+            conductor: solicitud.conductorNombre,
+            vehiculo: `${solicitud.vehiculo.patente} — ${solicitud.vehiculo.marca} ${solicitud.vehiculo.modelo}`,
+            destino: solicitud.destino,
+            proposito: solicitud.proposito,
+            horaSalidaEst: solicitud.ordenServicio?.horaSalidaEst ?? null,
+            horaRetornoEst: solicitud.ordenServicio?.horaRetornoEst ?? null,
+            salidaRegistradaEn: solicitud.bitacora.registradoEn,
+            kmSalida: solicitud.bitacora.kmSalida,
+            kmLlegada: solicitud.bitacora.kmLlegada,
+            horaRetornoReal: solicitud.bitacora.horaRetornoReal,
+            observacion: solicitud.bitacora.observacion,
+            paradas: solicitud.bitacora.paradas,
+          }}
+        />
+      )}
 
       {/* Panel observaciones — solo ENCARGADO/ADMIN, cuando hay contenido */}
       {(role === "ADMIN" || role === "ENCARGADO") && solicitud.observacionesSolicitud.length > 0 && (
